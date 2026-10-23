@@ -1,0 +1,4 @@
+# Fins de linha em LF em qualquer máquina, para o diff não mudar entre o PC e o notebook.
+* text=auto eol=lf
+*.png binary
+*.ico binary
