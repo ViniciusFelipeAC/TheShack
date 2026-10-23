@@ -1,0 +1,39 @@
+# Marvin: assistente pessoal, mordomo digital e porta de entrada da Shack.
+# Edite à vontade. O servidor recarrega este arquivo sozinho.
+id: marvin
+name: Marvin
+role: Assistente pessoal e orquestrador
+
+# Apelidos dos modelos do seu plano, em ordem de preferência.
+model: [sonnet, haiku]
+effort: low
+
+persona: persona.md
+chat: true
+
+tools:
+  builtin: []          # sem arquivos e sem shell
+  shack: [agents, tasks, calendar, reminders, timers, lists, notes, memory, rules, notify]
+
+# Ferramentas que sempre pedem a sua confirmação.
+confirm: [tasks_cancel, calendar_delete, reminders_delete, lists_delete, notes_delete, memory_delete]
+
+limits:
+  concurrency: 1
+  maxTurns: 40
+
+# Como ele aparece na casa. Cores em hexadecimal; as que faltarem são sorteadas a partir do id.
+appearance:
+  palette:
+    skin: "#e3b896"
+    hair: "#26252b"
+    temples: "#8d8d95"   # cabelo grisalho nas têmporas
+    outfit: "#22252d"
+    sleeve: "#d9d6cf"    # camisa por baixo do colete
+    accent: "#7a2a2e"    # gravata-borboleta
+    pants: "#1c1e24"
+    shoes: "#121317"
+  hair: neat             # neat ou messy
+  accessory: bowtie      # bowtie, headphones ou none
+  station: single-monitor   # single-monitor ou dual-monitor
+  idle: [tea, sofa-read, fireplace]   # tea, coffee, sofa-read, armchair, fireplace, bookshelf, water-plant, window

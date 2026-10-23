@@ -1,0 +1,46 @@
+# etnaD: agente de programação. É o Claude Code rodando pelo Agent SDK.
+# Edite à vontade. O servidor recarrega este arquivo sozinho.
+id: etnad
+name: etnaD
+role: Agente de programação
+
+# Apelidos dos modelos do seu plano, em ordem de preferência.
+model: [opus, sonnet]
+effort: high
+
+persona: persona.md
+chat: false
+
+tools:
+  builtin: [Read, Glob, Grep, Edit, Write, Bash, PowerShell]
+  shack: [report]
+
+workspace: required
+
+permissions:
+  autoApprove:          # comandos que rodam sem pedir aprovação
+    - "Bash(git status*)"
+    - "Bash(git diff*)"
+    - "Bash(git log*)"
+    - "Bash(npm test*)"
+    - "Bash(npm run test*)"
+  deny:                 # comandos sempre bloqueados
+    - "Bash(git push*)"
+
+limits:
+  concurrency: 1
+  maxTurns: 300
+
+# Como ele aparece na casa. As opções estão comentadas no agent.yaml do Marvin.
+appearance:
+  palette:
+    skin: "#c08560"
+    hair: "#1a1614"
+    outfit: "#2c3b36"
+    accent: "#e8a75a"    # luz do fone
+    pants: "#2a2f38"
+    shoes: "#cfcac0"
+  hair: messy
+  accessory: headphones
+  station: dual-monitor
+  idle: [coffee, bookshelf, water-plant]
