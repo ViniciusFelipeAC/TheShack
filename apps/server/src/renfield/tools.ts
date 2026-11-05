@@ -10,8 +10,8 @@ import type { Mind } from './mind.ts';
 
 export type ToolContext = { conversationId: string };
 
-/** Ferramenta do Marvin, independente do Agent SDK (o motor converte). */
-export type MarvinTool = {
+/** Ferramenta do Renfield, independente do Agent SDK (o motor converte). */
+export type RenfieldTool = {
   name: string;
   /** Grupo citado em `tools.shack` no agent.yaml. */
   group: string;
@@ -34,7 +34,7 @@ const TASK_STATUS = oneOf(['queued', 'running', 'waiting_input', 'done', 'failed
   concluída: 'done', concluida: 'done', feita: 'done', falhou: 'failed', falha: 'failed', cancelada: 'cancelled', canceled: 'cancelled',
 });
 
-export function marvinTools(d: { tasks: TaskBus; registry: Registry; mind: Mind; workspaces: Workspaces; account?: Account }): MarvinTool[] {
+export function renfieldTools(d: { tasks: TaskBus; registry: Registry; mind: Mind; workspaces: Workspaces; account?: Account }): RenfieldTool[] {
   /** Workspace pedido (id ou nome), ou o único cadastrado quando o agente exige um e não foi dito qual. */
   const pickWorkspace = (assignee: string, ref: unknown): string | undefined => {
     if (typeof ref === 'string' && ref.trim()) {
@@ -120,7 +120,7 @@ export function marvinTools(d: { tasks: TaskBus; registry: Registry; mind: Mind;
       },
       run: (a, ctx) => {
         const assignee = String(a.assignee).toLowerCase();
-        if (assignee === 'marvin') return 'Erro: tarefas são para os outros agentes. Responda você mesmo.';
+        if (assignee === 'renfield') return 'Erro: tarefas são para os outros agentes. Responda você mesmo.';
         const warning = a.quota_ok ? null : quotaWarning();
         if (warning) return out({ created: null, needsConfirmation: warning });
         const t = d.tasks.create(
@@ -128,7 +128,7 @@ export function marvinTools(d: { tasks: TaskBus; registry: Registry; mind: Mind;
             assignee, title: String(a.title), prompt: String(a.prompt),
             workspaceId: pickWorkspace(assignee, a.workspace), priority: (a.priority as 'low' | 'normal' | 'high') ?? 'normal',
           },
-          { kind: 'agent', agentId: 'marvin', conversationId: ctx.conversationId },
+          { kind: 'agent', agentId: 'renfield', conversationId: ctx.conversationId },
         );
         return out({ created: brief(t) });
       },
@@ -137,7 +137,7 @@ export function marvinTools(d: { tasks: TaskBus; registry: Registry; mind: Mind;
       name: 'tasks_cancel', group: 'tasks',
       description: 'Cancela uma tarefa. Ação destrutiva: o dono da casa confirma antes.',
       shape: { id: id() },
-      run: (a) => out({ cancelled: brief(d.tasks.cancel(String(a.id), 'Cancelada pelo Marvin, a pedido do dono da casa.')) }),
+      run: (a) => out({ cancelled: brief(d.tasks.cancel(String(a.id), 'Cancelada pelo Renfield, a pedido do dono da casa.')) }),
     },
     {
       name: 'tasks_answer', group: 'tasks',
@@ -168,7 +168,7 @@ export function marvinTools(d: { tasks: TaskBus; registry: Registry; mind: Mind;
         content: text(2000, 1), kind: oneOf(['fact', 'preference'], { fato: 'fact', preferência: 'preference', preferencia: 'preference' }).optional(),
         from_feedback: bool().optional().describe('true quando vier de uma correção do dono da casa'),
       },
-      run: (a) => out({ saved: d.mind.addMemory(String(a.content), (a.kind as 'fact' | 'preference') ?? 'fact', a.from_feedback ? 'feedback' : 'marvin') }),
+      run: (a) => out({ saved: d.mind.addMemory(String(a.content), (a.kind as 'fact' | 'preference') ?? 'fact', a.from_feedback ? 'feedback' : 'renfield') }),
     },
     {
       name: 'memory_update', group: 'memory',
@@ -195,7 +195,7 @@ export function marvinTools(d: { tasks: TaskBus; registry: Registry; mind: Mind;
         instruction: text(2000, 1), trigger: text(200).optional(),
         from_feedback: bool().optional().describe('true quando vier de uma correção do dono da casa'),
       },
-      run: (a) => out({ saved: d.mind.addRule(String(a.instruction), (a.trigger as string | undefined) || null, a.from_feedback ? 'feedback' : 'marvin') }),
+      run: (a) => out({ saved: d.mind.addRule(String(a.instruction), (a.trigger as string | undefined) || null, a.from_feedback ? 'feedback' : 'renfield') }),
     },
     {
       name: 'rules_update', group: 'rules',

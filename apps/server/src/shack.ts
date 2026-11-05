@@ -14,14 +14,15 @@ import { type AgentDef, Registry } from './core/registry.ts';
 import { type AgentRunner, TaskBus } from './core/task-bus.ts';
 import { Workspaces } from './core/workspaces.ts';
 import { type Db, openDb } from './db/database.ts';
-import { chatRepo, mindRepo } from './db/marvin-repos.ts';
+import { chatRepo, mindRepo } from './db/renfield-repos.ts';
 import { approvalsRepo, devicesRepo, eventsRepo, tasksRepo } from './db/repos.ts';
-import { Account } from './marvin/account.ts';
-import { assistantTools } from './marvin/assistant-tools.ts';
-import { ChatService } from './marvin/chat.ts';
-import { type ChatEngine, SdkEngine } from './marvin/engine.ts';
-import { Mind } from './marvin/mind.ts';
-import { marvinTools } from './marvin/tools.ts';
+import { Account } from './renfield/account.ts';
+import { assistantTools } from './renfield/assistant-tools.ts';
+import { Attachments } from './renfield/attachments.ts';
+import { ChatService } from './renfield/chat.ts';
+import { type ChatEngine, SdkEngine } from './renfield/engine.ts';
+import { Mind } from './renfield/mind.ts';
+import { renfieldTools } from './renfield/tools.ts';
 import { Notifier } from './notifications/notifier.ts';
 import { type PushSender, WebPush } from './notifications/push.ts';
 
@@ -37,6 +38,7 @@ export type Shack = {
   mind: Mind;
   account: Account;
   chat: ChatService;
+  attachments: Attachments;
   calendar: CalendarProvider;
   reminders: Reminders;
   timers: Timers;
@@ -100,17 +102,21 @@ export function createShack(config: Config, opts: ShackOptions = {}): Shack {
   const notes = new Notes(db, bus);
   const scheduler = new Scheduler(reminders, timers, clock);
 
+  // Anexos do chat. Os que ninguém usou em 24 horas saem já na partida.
+  const attachments = new Attachments(db, config.uploadsDir, clock);
+  attachments.prune();
+
   const conversations = chatRepo(db);
   const engine = opts.engine ?? new SdkEngine({
-    agentId: 'marvin',
-    tools: [...marvinTools({ tasks, registry, mind, workspaces, account }), ...assistantTools({ calendar, reminders, timers, lists, notes, notifier, timezone: tz })],
+    agentId: 'renfield',
+    tools: [...renfieldTools({ tasks, registry, mind, workspaces, account }), ...assistantTools({ calendar, reminders, timers, lists, notes, notifier, timezone: tz })],
     account,
     approvals,
     fallbackModel: config.fallbackModel,
-    workDir: resolve(ROOT, 'data', 'agents', 'marvin'),
+    workDir: resolve(ROOT, 'data', 'agents', 'renfield'),
     sessionStore: { get: (id) => conversations.sessionId(id), set: (id, s) => conversations.setSessionId(id, s) },
   });
-  const chat = new ChatService({ repo: conversations, bus, tasks, registry, approvals, mind, workspaces, engine, timezone: tz });
+  const chat = new ChatService({ repo: conversations, bus, tasks, registry, approvals, mind, workspaces, engine, timezone: tz, attachments });
 
   bus.subscribe((e) => {
     // Manifesto mudou (por exemplo, a concorrência): tenta despachar de novo.
@@ -118,7 +124,7 @@ export function createShack(config: Config, opts: ShackOptions = {}): Shack {
     // Tarefas de outros agentes também viram notificação, além do aviso no chat.
     if (e.type === 'task.done' || e.type === 'task.failed' || e.type === 'task.waiting_input') {
       const t = e.data as Task;
-      if (t.assignee === 'marvin') return;
+      if (t.assignee === 'renfield') return;
       const name = registry.get(t.assignee)?.manifest?.name ?? t.assignee;
       const suspect = e.type === 'task.done' && t.result?.verification?.status === 'suspect';
       const n = suspect ? { title: `${name} concluiu, mas o resultado é suspeito`, priority: 'high' as const }
@@ -134,7 +140,7 @@ export function createShack(config: Config, opts: ShackOptions = {}): Shack {
   if (opts.startScheduler !== false) scheduler.start();
 
   return {
-    config, db, bus, registry, approvals, tasks, workspaces, auth, mind, account, chat,
+    config, db, bus, registry, approvals, tasks, workspaces, auth, mind, account, chat, attachments,
     calendar, reminders, timers, lists, notes, notifier, push, scheduler,
     close() { scheduler.stop(); engine.reset(); tasks.shutdown(); db.close(); },
   };

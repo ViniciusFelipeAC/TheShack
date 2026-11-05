@@ -28,11 +28,12 @@ Todo erro tem o mesmo formato:
 | 400 | `invalid_request` | Corpo ou parâmetros inválidos. `details` traz os problemas campo a campo |
 | 400 | `unknown_agent` | A tarefa aponta para um agente que não existe |
 | 400 | `workspace_required`, `unknown_workspace` | Tarefa do etnaD sem workspace, ou com um que não existe |
-| 409 | `agent_cannot_run` | O agente não executa tarefas (o Marvin conversa pelo chat) |
+| 409 | `agent_cannot_run` | O agente não executa tarefas (o Renfield conversa pelo chat) |
 | 409 | `subscription_required` | A credencial do Claude Code não é a da sua assinatura |
 | 401 | `unauthorized`, `invalid_code` | Token ausente, inválido ou revogado, ou código de pareamento errado |
 | 404 | `not_found` | Recurso ou rota inexistente |
 | 409 | `conflict`, `agent_disabled` | A ação não combina com o estado atual |
+| 413 | `too_large` | Anexo maior que o limite do tipo |
 | 429 | `too_many_attempts` | Pareamento bloqueado por excesso de tentativas |
 
 ## Tarefas
@@ -77,7 +78,7 @@ O etnaD só trabalha dentro de pastas cadastradas como workspace.
   - `unverified`: não havia como conferir (workspace sem git, sem branch por tarefa ou com mudanças não salvas antes).
 - **Nota de passagem:** quando uma tarefa falha ou é cancelada, `handoff` guarda o que foi feito, o que falhou e o que falta. O etnaD escreve a nota num turno curto e sem ferramentas; sem sessão, sem cota ou se o turno falhar, o servidor monta uma nota com os últimos passos e o diffstat. A nota entra no prompt da tentativa seguinte, ou da próxima tarefa no mesmo workspace, até alguma tarefa ali ser concluída. Enquanto a nota é escrita, a tarefa cancelada continua ocupando a vaga do agente.
 - **Perguntas:** quando o etnaD pergunta algo, a aprovação tem `kind: "question"` e `options`. Responda com `POST /approvals/{id}` e `{ "decision": "approve", "answer": "<opção ou texto livre>" }`. No chat, "sim" e "não" não respondem perguntas, só aprovações.
-- **Quem executa tarefas:** só agentes com ferramentas de código, hoje o etnaD. Pedir uma tarefa ao Marvin devolve `agent_cannot_run`, porque ele conversa pelo chat.
+- **Quem executa tarefas:** só agentes com ferramentas de código, hoje o etnaD. Pedir uma tarefa ao Renfield devolve `agent_cannot_run`, porque ele conversa pelo chat.
 
 ## Assistente: agenda, lembretes, timers, listas e notas
 
@@ -90,7 +91,7 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
 | `GET /reminders?status=`, `POST /reminders`, `PATCH/DELETE /reminders/{id}` | Lembretes (`kind: "reminder"`, avisam uma vez) e alarmes (`kind: "alarm"`, tocam de 2 em 2 minutos até serem dispensados, no máximo 10 vezes). Use `at` para horário único ou `cron` de 5 campos para repetir, por exemplo `0 8 * * 1-5` (dias úteis às 8h) |
 | `POST /reminders/{id}/snooze` (`{ "minutes" }`), `POST /reminders/{id}/dismiss` | Soneca e dispensar |
 | `GET /timers`, `POST /timers` (`{ "seconds", "label" }`), `DELETE /timers/{id}` | Timers. Eles sobrevivem a reinícios |
-| `GET/POST /lists`, `PATCH/DELETE /lists/{id}`, `POST /lists/{id}/items`, `PATCH/DELETE /lists/{id}/items/{itemId}`, `POST /lists/{id}/clear-done` | Listas com itens marcáveis. "Mercado" e "Afazeres" já vêm criadas |
+| `GET/POST /lists`, `PATCH/DELETE /lists/{id}`, `POST /lists/{id}/items`, `PATCH/DELETE /lists/{id}/items/{itemId}`, `POST /lists/{id}/clear-done` | Listas com itens marcáveis. "Mercado" (lista de compras) e "Afazeres" (to-do) já vêm criadas e aparecem no Quadro do app. O Renfield entende "lista de compras", "supermercado", "to-do" e "pendências" como essas duas, pelo id, mesmo que você as renomeie |
 | `GET /notes?q=`, `POST /notes`, `PATCH/DELETE /notes/{id}` | Notas rápidas, com busca por texto |
 
 **Agendador:** quem dispara é o servidor, que confere a cada segundo o que venceu. Se o servidor estava desligado:
@@ -102,7 +103,7 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
 **Notificações:**
 
 - `GET /notifications` traz as recentes e o total de `unread`. `POST /notifications/{id}/read` e `POST /notifications/read-all` marcam como lidas. `POST /notifications/test` manda um teste.
-- Lembretes, alarmes, timers e tarefas de outros agentes geram notificação. O Marvin também pode mandar uma, com a ferramenta `notify_user`.
+- Lembretes, alarmes, timers e tarefas de outros agentes geram notificação. O Renfield também pode mandar uma, com a ferramenta `notify_user`.
 - **Modo ativo:** avisos abaixo da prioridade mínima do modo ficam com `silenced: true`. Eles não tocam nem vão por push, e quando o modo é desligado chega um resumo (`kind: "digest"`).
 - **Push do navegador:** `GET /push/vapid-key` devolve a chave pública. `POST /push/subscriptions` registra a assinatura (`subscription.toJSON()` do navegador), e `DELETE /push/subscriptions` com `{ "endpoint" }` cancela.
   - As chaves VAPID são geradas na primeira vez e ficam no banco.
@@ -110,20 +111,40 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
 
 **Eventos:** `data.changed` com `{ entity: "calendar" | "reminders" | "timers" | "lists" | "notes" }` avisa as telas para recarregar. `reminder.fired`, `timer.finished` e `notification.created` também chegam pelo WebSocket.
 
-## Chat com o Marvin
+## Chat com o Renfield
 
 - **Conversa principal:** tem o id `main` e é contínua, no estilo Alexa. Outras conversas podem ser criadas com `POST /conversations`.
-- **Mandar mensagem:** `POST /conversations/{id}/messages` com `{ "text", "style" }`, em que `style` é `normal`, `short` ou `voice`. Duas formas de receber a resposta:
+- **Mandar mensagem:** `POST /conversations/{id}/messages` com `{ "text", "style", "attachmentIds"? }`, em que `style` é `normal`, `short` ou `voice`. Texto vazio vale quando há anexo. Duas formas de receber a resposta:
   - Sem parâmetro, responde 202 na hora, e a resposta chega pelo WebSocket.
   - Com `?wait=true`, a resposta vem no próprio corpo. É o jeito mais simples para atalhos e voz.
 - **Histórico:** `GET /conversations/{id}/messages?limit=50&before=<data>` devolve as mensagens em ordem cronológica.
 - **Tipos de mensagem (`kind`):**
   - `text`: conversa normal.
   - `task_notice`: aviso escrito pelo servidor quando uma tarefa termina, falha ou espera você. Não gasta cota.
-  - `error`: o Marvin não conseguiu responder, e o motivo vem no texto.
-- **"Sim" e "não":** quando há exatamente uma aprovação pendente, responder "sim" ou "não" no chat resolve essa aprovação sem gastar uma resposta do Marvin.
-- **Feedback:** `POST /feedback` com `{ "text" }` entrega a correção ao Marvin, que a transforma em regra ou memória marcada como nova.
+  - `error`: o Renfield não conseguiu responder, e o motivo vem no texto.
+- **Anexos na mensagem:** toda mensagem tem `attachments`, uma lista (vazia quando não há anexo).
+- **"Sim" e "não":** quando há exatamente uma aprovação pendente, responder "sim" ou "não" no chat resolve essa aprovação sem gastar uma resposta do Renfield.
+- **Feedback:** `POST /feedback` com `{ "text" }` entrega a correção ao Renfield, que a transforma em regra ou memória marcada como nova.
 - **Uma resposta por vez:** as mensagens de cada conversa entram numa fila.
+
+### Anexos
+
+Fotos, PDFs e arquivos de texto vão ao Renfield junto com a mensagem, em dois passos:
+
+1. `POST /attachments?name=foto.jpg` com o próprio arquivo no corpo e o tipo no `Content-Type`. Volta `201` com `{ id, name, mime, kind, size, createdAt }`, em que `kind` é `image`, `pdf` ou `text`.
+2. A mensagem leva os ids em `attachmentIds`, no máximo 5. Cada anexo vale para uma mensagem só.
+
+| Tipo | Aceita | Limite |
+|---|---|---|
+| `image` | JPEG, PNG, GIF e WebP, conferidos pelos bytes e não pelo nome | 5 MB. O app reduz a foto para 1568 px no lado maior antes de subir, e converte HEIC para JPEG |
+| `pdf` | PDF | 10 MB |
+| `text` | `text/*`, JSON, YAML, CSV, Markdown e código | 512 KB. Vão ao modelo no máximo 100 mil caracteres, limpos de caracteres invisíveis |
+
+- **Para o modelo:** foto vira bloco de imagem, PDF vira bloco de documento e texto vira texto marcado como material do dono da casa, que não dá ordens.
+- **Cota:** um anexo fica na sessão do Renfield e pesa nas respostas seguintes também. Uma foto reduzida custa até cerca de 1.600 tokens; um PDF, de 1.500 a 3.000 tokens de texto por página, mais a imagem de cada página.
+- **Baixar:** `GET /attachments/{id}` exige o token, como o resto da API. Texto sai sempre como `text/plain`, nunca como página.
+- **Onde ficam:** em `SHACK_UPLOADS_DIR` (padrão `data/uploads`), um arquivo por id. O que subiu e não entrou em nenhuma mensagem em 24 horas é apagado.
+- O etnaD não recebe os anexos: o Renfield pode descrever o conteúdo ao delegar.
 
 ### Treino
 
@@ -132,7 +153,7 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
 | `GET/POST /memories`, `PATCH/DELETE /memories/{id}` | Fatos e preferências sobre você. `PATCH` com `{ "isNew": false }` marca como revisada |
 | `GET/POST /rules`, `PATCH/DELETE /rules/{id}` | Regras aprendidas, com gatilho opcional. `enabled` liga e desliga |
 | `GET/POST /modes`, `PUT /settings/mode` | Modos e o modo ativo (`{ "name": "foco" }` ou `{ "name": null }`) |
-| `GET /agents/marvin/persona`, `PUT /agents/marvin/persona` | O `persona.md`. Vale a partir da próxima mensagem |
+| `GET /agents/renfield/persona`, `PUT /agents/renfield/persona` | O `persona.md`. Vale a partir da próxima mensagem |
 
 ### Conta e custo
 
@@ -145,7 +166,7 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
 - `windows`: cada janela (`five_hour`, `seven_day` e as por modelo). Uma janela cujo `resetsAt` já passou sai da lista.
 - `overage`: verdadeiro se o Claude Code indicar cobrança extra.
 
-Com `allowed_warning`, a ferramenta `tasks_create` do Marvin devolve `needsConfirmation` em vez de criar a tarefa. Ele pergunta a você e chama de novo com `quota_ok: true`.
+Com `allowed_warning`, a ferramenta `tasks_create` do Renfield devolve `needsConfirmation` em vez de criar a tarefa. Ele pergunta a você e chama de novo com `quota_ok: true`.
 
 ### Acesso pelo celular
 
@@ -196,6 +217,6 @@ Todas as mensagens são JSON, nos dois sentidos.
 |---|---|
 | `{ "type": "approval.respond", "approvalId", "decision": "approve" \| "deny", "answer"? }` | nada, ou `error`. O resultado chega como evento `approval.resolved` |
 | `{ "type": "ping" }` | `{ "type": "pong" }` |
-| `{ "type": "chat.send", "conversationId"?, "text", "style"?, "clientId" }` | a sua mensagem e a do Marvin chegam como eventos `chat.message`. Enquanto ele escreve, chegam `{ "type": "chat.delta", "conversationId", "messageId", "text" }` com os pedaços do texto. `conversationId` padrão: `main` |
+| `{ "type": "chat.send", "conversationId"?, "text", "style"?, "attachmentIds"?, "clientId" }` | a sua mensagem e a do Renfield chegam como eventos `chat.message`. Enquanto ele escreve, chegam `{ "type": "chat.delta", "conversationId", "messageId", "text" }` com os pedaços do texto. `conversationId` padrão: `main` |
 
 Erros chegam como `{ "type": "error", "code", "message" }` e não fecham a conexão.

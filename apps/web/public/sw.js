@@ -2,6 +2,7 @@
 // A API (/api) nunca passa pelo cache: o estado da casa é sempre o do servidor.
 const CACHE = 'shack-v1';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/apple-touch-icon.png', '/icons/icon-192.png'];
+const NAV_TIMEOUT_MS = 6000;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => undefined).then(() => self.skipWaiting()));
@@ -20,11 +21,16 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
   // Páginas: rede primeiro (pega a versão nova), cache se o servidor estiver fora do ar.
   if (req.mode === 'navigate') {
-    event.respondWith(fetch(req).then((res) => {
+    const network = fetch(req).then((res) => {
       const copy = res.clone();
       if (res.ok) caches.open(CACHE).then((c) => c.put('/', copy));
       return res;
-    }).catch(() => caches.match('/').then((r) => r ?? Response.error())));
+    });
+    const viaCache = network.catch(() => caches.match('/'));
+    // Com o PC fora do Tailscale, o pedido fica pendurado em vez de falhar: a tela branca ficava sem fim.
+    // Depois de alguns segundos vale a cópia guardada, que pelo menos mostra o aviso de partida.
+    const late = new Promise((resolve) => setTimeout(resolve, NAV_TIMEOUT_MS)).then(() => caches.match('/')).then((hit) => hit ?? viaCache);
+    event.respondWith(Promise.race([viaCache, late]).then((r) => r ?? Response.error()));
     return;
   }
   // Arquivos com hash no nome nunca mudam: cache primeiro.

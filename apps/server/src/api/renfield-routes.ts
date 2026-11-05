@@ -1,19 +1,59 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  AccountStatus, ActiveModeInput, ChatMessage, Conversation, FeedbackInput, Memory, MemoryInput, MemoryPatch,
+  AccountStatus, ActiveModeInput, Attachment, ATTACHMENT_LIMITS, ChatMessage, Conversation, FeedbackInput, Memory, MemoryInput, MemoryPatch,
   Mode, ModeInput, Rule, RuleInput, RulePatch, SendMessageInput, SendMessageResult,
 } from '@shack/shared';
+import { bodyLimit } from 'hono/body-limit';
 import type { Shack } from '../shack.ts';
 import { type Env, ERRORS, IdParam, J } from './common.ts';
 
 const Deleted = z.object({ deleted: z.boolean() });
+const Binary = z.string().openapi({ type: 'string', format: 'binary' });
 
-export function registerMarvinRoutes(api: OpenAPIHono<Env>, shack: Shack) {
-  const { chat, mind, account } = shack;
+export function registerRenfieldRoutes(api: OpenAPIHono<Env>, shack: Shack) {
+  const { chat, mind, account, attachments } = shack;
+
+  /* ---------- anexos ---------- */
+  // O maior anexo aceito é o PDF; o corte aqui evita ler um corpo gigante para depois recusar.
+  api.use('/attachments', bodyLimit({
+    maxSize: ATTACHMENT_LIMITS.pdfBytes + 64 * 1024,
+    onError: (c) => c.json({ error: { code: 'too_large', message: 'Arquivo grande demais. O limite é 10 MB para PDF, 5 MB para foto e 512 KB para texto.' } }, 413),
+  }));
+
+  api.openapi(createRoute({
+    method: 'post', path: '/attachments', tags: ['Chat'],
+    summary: 'Sobe um anexo para a próxima mensagem. O corpo é o próprio arquivo, o tipo vai no Content-Type e o nome em ?name=.',
+    request: {
+      query: z.object({ name: z.string().trim().min(1).max(200) }),
+      body: { content: { 'application/octet-stream': { schema: Binary } }, description: 'O arquivo. Foto (JPG, PNG, GIF, WebP), PDF ou texto.' },
+    },
+    responses: {
+      201: { ...J(Attachment), description: 'Anexo pronto. Mande o id em attachmentIds; sem uso em 24 horas, ele é apagado.' },
+      400: ERRORS[400], 401: ERRORS[401], 413: { ...ERRORS[400], description: 'Arquivo grande demais' },
+    },
+  }), async (c) => {
+    const bytes = Buffer.from(await c.req.arrayBuffer());
+    return c.json(attachments.save({ name: c.req.valid('query').name, mime: c.req.header('content-type') ?? '', bytes, deviceId: c.get('device').id }), 201);
+  });
+
+  api.openapi(createRoute({
+    method: 'get', path: '/attachments/{id}', tags: ['Chat'], summary: 'Baixa um anexo. Texto sai sempre como text/plain.',
+    request: { params: IdParam },
+    responses: { 200: { content: { 'application/octet-stream': { schema: Binary } }, description: 'O arquivo' }, 401: ERRORS[401], 404: ERRORS[404] },
+  }), (c) => {
+    const { meta, data } = attachments.read(c.req.valid('param').id);
+    return c.body(new Uint8Array(data), 200, {
+      // Nunca como HTML: um arquivo enviado não pode virar página com acesso à sessão do app.
+      'content-type': meta.kind === 'text' ? 'text/plain; charset=utf-8' : meta.mime,
+      'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(meta.name)}`,
+      'cache-control': 'private, max-age=31536000, immutable',
+      'x-content-type-options': 'nosniff',
+    });
+  });
 
   /* ---------- conversa ---------- */
   api.openapi(createRoute({
-    method: 'get', path: '/conversations', tags: ['Chat'], summary: 'Lista as conversas com o Marvin. A principal tem id "main".',
+    method: 'get', path: '/conversations', tags: ['Chat'], summary: 'Lista as conversas com o Renfield. A principal tem id "main".',
     responses: { 200: { ...J(z.array(Conversation)), description: 'Conversas' }, 401: ERRORS[401] },
   }), (c) => c.json(chat.conversations(), 200));
 
@@ -34,7 +74,7 @@ export function registerMarvinRoutes(api: OpenAPIHono<Env>, shack: Shack) {
 
   api.openapi(createRoute({
     method: 'post', path: '/conversations/{id}/messages', tags: ['Chat'],
-    summary: 'Manda uma mensagem ao Marvin. A resposta chega pelo WebSocket, ou no corpo com ?wait=true.',
+    summary: 'Manda uma mensagem ao Renfield. A resposta chega pelo WebSocket, ou no corpo com ?wait=true.',
     request: { params: IdParam, query: z.object({ wait: z.enum(['true', 'false']).optional() }), body: J(SendMessageInput) },
     responses: {
       200: { ...J(SendMessageResult), description: 'Mensagem e resposta (com ?wait=true)' },
@@ -44,15 +84,15 @@ export function registerMarvinRoutes(api: OpenAPIHono<Env>, shack: Shack) {
   }), async (c) => {
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
-    const r = chat.send(id, body.text, body.style, c.get('device').id);
+    const r = chat.send(id, body.text, body.style, c.get('device').id, body.attachmentIds);
     if (c.req.valid('query').wait === 'true' && r.reply) return c.json({ conversationId: id, message: r.message, reply: await r.reply }, 200);
     return c.json({ conversationId: id, message: r.message, reply: null }, 202);
   });
 
   api.openapi(createRoute({
-    method: 'post', path: '/feedback', tags: ['Chat'], summary: 'Corrige o Marvin. Ele transforma o feedback em regra ou memória.',
+    method: 'post', path: '/feedback', tags: ['Chat'], summary: 'Corrige o Renfield. Ele transforma o feedback em regra ou memória.',
     request: { body: J(FeedbackInput) },
-    responses: { 202: { ...J(SendMessageResult), description: 'Feedback entregue ao Marvin' }, 400: ERRORS[400], 401: ERRORS[401] },
+    responses: { 202: { ...J(SendMessageResult), description: 'Feedback entregue ao Renfield' }, 400: ERRORS[400], 401: ERRORS[401] },
   }), (c) => {
     const r = chat.send('main', `/feedback ${c.req.valid('json').text}`, 'normal', c.get('device').id);
     return c.json({ conversationId: 'main', message: r.message, reply: null }, 202);
@@ -60,7 +100,7 @@ export function registerMarvinRoutes(api: OpenAPIHono<Env>, shack: Shack) {
 
   /* ---------- memórias ---------- */
   api.openapi(createRoute({
-    method: 'get', path: '/memories', tags: ['Treino'], summary: 'O que o Marvin sabe sobre você',
+    method: 'get', path: '/memories', tags: ['Treino'], summary: 'O que o Renfield sabe sobre você',
     responses: { 200: { ...J(z.array(Memory)), description: 'Memórias' }, 401: ERRORS[401] },
   }), (c) => c.json(mind.memories(), 200));
 

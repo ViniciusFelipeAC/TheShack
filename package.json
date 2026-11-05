@@ -19,7 +19,8 @@
     "test": "npm test -w @shack/server && npm test -w @shack/web",
     "typecheck": "tsc -p tsconfig.json",
     "token": "npm run token -w @shack/server --",
-    "icons": "node scripts/icons.ts"
+    "icons": "node scripts/icons.ts",
+    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shortcut.ps1"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

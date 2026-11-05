@@ -5,8 +5,8 @@ import type { Connection } from './live.ts';
 import { Portrait } from './Portrait.tsx';
 import type { MapName, Weather } from './scene/engine.ts';
 
-export type Section = 'agenda' | 'lembretes' | 'listas' | 'notas';
-export const SECTIONS: Array<[Section, string]> = [['agenda', 'Agenda'], ['lembretes', 'Lembretes e timers'], ['listas', 'Listas'], ['notas', 'Notas']];
+export type Section = 'quadro' | 'agenda' | 'lembretes' | 'listas' | 'notas';
+export const SECTIONS: Array<[Section, string]> = [['quadro', 'Quadro'], ['agenda', 'Agenda'], ['lembretes', 'Lembretes e timers'], ['listas', 'Listas'], ['notas', 'Notas']];
 const WEATHER_TEXT: Record<Weather, string> = { fog: 'Neblina', rain: 'Chuva', clear: 'Céu fechado' };
 const CONNECTION_TEXT: Record<Connection, string> = { online: 'Conectado', connecting: 'Conectando…', offline: 'Sem conexão' };
 
@@ -115,7 +115,7 @@ export function QuotaMeter({ quota }: { quota: QuotaStatus | null }) {
   const label = !quota ? 'Cota: sem dados' : quota.status === 'rejected' ? 'Cota esgotada' : pct === null ? 'Cota: sem dados' : `Cota ${Math.round(pct)}%`;
   const short = !quota || (pct === null && quota.status !== 'rejected') ? '–' : quota.status === 'rejected' ? 'esgotada' : `${Math.round(pct!)}%`;
   const title = !quota
-    ? 'O uso da cota aparece depois da primeira resposta do Marvin ou do etnaD.'
+    ? 'O uso da cota aparece depois da primeira resposta do Renfield ou do etnaD.'
     : [
       quota.kind ? `Medido na ${WINDOW_TEXT[quota.kind] ?? quota.kind}.` : null,
       quota.resetsAt ? `Renova em ${new Date(quota.resetsAt).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : null,
@@ -166,10 +166,10 @@ export function Welcome({ onClose }: { onClose(): void }) {
       <div className="wcard glass" role="dialog" aria-modal="true" aria-labelledby="wTitle" onClick={(e) => e.stopPropagation()}>
         <h2 id="wTitle">Bem-vindo à Shack</h2>
         <ul>
-          <li><b>1</b><span><strong>Fale com o Marvin</strong> no chat ao lado (no celular, embaixo). Ele cuida da agenda, dos lembretes e das listas, e passa trabalho para os outros agentes.</span></li>
+          <li><b>1</b><span><strong>Fale com o Renfield</strong> no chat ao lado (no celular, embaixo). Ele cuida da agenda, dos lembretes e das listas, e passa trabalho para os outros agentes.</span></li>
           <li><b>2</b><span><strong>Veja a casa trabalhar.</strong> Cada agente tem a sua mesa e vai até ela quando recebe uma tarefa. Toque num cartão ou num personagem para ver a tarefa, a fila e o histórico.</span></li>
           <li><b>3</b><span><strong>Quando alguém precisar de você</strong>, aparece um aviso e um balão "?". Você aprova ou nega com um toque.</span></li>
-          <li><b>4</b><span>No <strong>Menu</strong> ficam a agenda, os lembretes, as listas, as notas e as configurações. Arraste para andar pela casa e use a roda do mouse ou a pinça para dar zoom.</span></li>
+          <li><b>4</b><span>No <strong>Quadro</strong> (no Menu e no topo do chat) ficam o calendário, a lista de compras e os afazeres que o Renfield mantém. No <strong>Menu</strong> ficam também os lembretes, as notas e as configurações. Arraste para andar pela casa e use a roda do mouse ou a pinça para dar zoom.</span></li>
         </ul>
         <div className="row"><button ref={go} className="btn primary" type="button" onClick={onClose}>Começar</button></div>
       </div>

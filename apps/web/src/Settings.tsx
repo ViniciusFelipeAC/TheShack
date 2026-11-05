@@ -21,9 +21,9 @@ export function Settings({ account, onClose }: { account: AccountStatus | null; 
 
   return (
     <div className="overlay" onClick={onClose}>
-      <section className="panel settings" role="dialog" aria-modal="true" aria-label="Configurações do Marvin" onClick={(e) => e.stopPropagation()}>
+      <section className="panel settings" role="dialog" aria-modal="true" aria-label="Configurações do Renfield" onClick={(e) => e.stopPropagation()}>
         <header className="row between">
-          <h2>Configurações do Marvin</h2>
+          <h2>Configurações do Renfield</h2>
           <button className="btn ghost" type="button" onClick={onClose} aria-label="Fechar">Fechar</button>
         </header>
         <nav className="tabs" role="tablist">
@@ -47,16 +47,16 @@ export function Settings({ account, onClose }: { account: AccountStatus | null; 
 function PersonaTab() {
   const [content, setContent] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  useEffect(() => { api<{ content: string }>('/agents/marvin/persona').then((p) => setContent(p.content)); }, []);
+  useEffect(() => { api<{ content: string }>('/agents/renfield/persona').then((p) => setContent(p.content)); }, []);
   const save = async () => {
-    await api('/agents/marvin/persona', { method: 'PUT', body: { content } });
+    await api('/agents/renfield/persona', { method: 'PUT', body: { content } });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
   if (content === null) return <p className="muted">Carregando…</p>;
   return (
     <div className="stack">
-      <p className="muted small">É o arquivo <code>agents/marvin/persona.md</code>. Vale a partir da próxima mensagem.</p>
+      <p className="muted small">É o arquivo <code>agents/renfield/persona.md</code>. Vale a partir da próxima mensagem.</p>
       <label htmlFor="persona" className="sr-only">Persona</label>
       <textarea id="persona" value={content} onChange={(e) => setContent(e.target.value)} rows={16} />
       <div className="row">
@@ -82,8 +82,8 @@ function MemoriesTab() {
   };
   return (
     <div className="stack">
-      <p className="muted small">O que o Marvin sabe sobre você. Ele também anota sozinho quando você conta algo duradouro. Uma memória errada é pior que nenhuma: corrija ou apague o que estiver velho.</p>
-      {items.some((m) => m.isNew) && <p className="small"><span className="tag new">{items.filter((m) => m.isNew).length} para revisar</span> Anotadas pelo Marvin e ainda não conferidas por você.</p>}
+      <p className="muted small">O que o Renfield sabe sobre você. Ele também anota sozinho quando você conta algo duradouro. Uma memória errada é pior que nenhuma: corrija ou apague o que estiver velho.</p>
+      {items.some((m) => m.isNew) && <p className="small"><span className="tag new">{items.filter((m) => m.isNew).length} para revisar</span> Anotadas pelo Renfield e ainda não conferidas por você.</p>}
       {items.length === 0 && <p className="muted">Nada anotado ainda.</p>}
       <ul className="list">
         {items.map((m) => (
@@ -123,7 +123,7 @@ function RulesTab() {
   };
   return (
     <div className="stack">
-      <p className="muted small">Comportamentos que o Marvin aprendeu. As que vieram de um feedback seu aparecem como novas até você revisar. Regra que ninguém revisa vira superstição: apague as que não fazem mais sentido.</p>
+      <p className="muted small">Comportamentos que o Renfield aprendeu. As que vieram de um feedback seu aparecem como novas até você revisar. Regra que ninguém revisa vira superstição: apague as que não fazem mais sentido.</p>
       {items.some((r) => r.isNew) && <p className="small"><span className="tag new">{items.filter((r) => r.isNew).length} para revisar</span></p>}
       {items.length === 0 && <p className="muted">Nenhuma regra ainda.</p>}
       <ul className="list">
@@ -267,7 +267,7 @@ function NotificationsTab() {
 
 function AccountTab({ account }: { account: AccountStatus | null }) {
   if (!account || account.subscriptionOk === null) {
-    return <p className="muted">A conta é verificada na primeira conversa com o Marvin.</p>;
+    return <p className="muted">A conta é verificada na primeira conversa com o Renfield.</p>;
   }
   return (
     <dl className="facts">

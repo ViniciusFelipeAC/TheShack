@@ -15,6 +15,7 @@ const Env = z.object({
   SHACK_RUNNER: z.enum(['sdk', 'simulated']).default('sdk'),
   SHACK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   SHACK_WEB_DIR: z.string().default('./apps/web/dist'),
+  SHACK_UPLOADS_DIR: z.string().default('./data/uploads'),
 });
 
 export type Config = {
@@ -29,6 +30,8 @@ export type Config = {
   eventRetentionDays: number;
   /** Build do app web (npm run build). O servidor entrega o app no mesmo endereço da API, como o celular precisa. */
   webDir: string;
+  /** Anexos do chat. Um arquivo por anexo, com o id como nome. */
+  uploadsDir: string;
 };
 
 /** Carrega o .env da raiz, se existir. Variáveis já definidas no ambiente têm prioridade. */
@@ -49,5 +52,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     runner: e.SHACK_RUNNER,
     eventRetentionDays: e.SHACK_EVENT_RETENTION_DAYS,
     webDir: resolve(ROOT, e.SHACK_WEB_DIR),
+    uploadsDir: resolve(ROOT, e.SHACK_UPLOADS_DIR),
   };
 }

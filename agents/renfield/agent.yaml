@@ -1,7 +1,7 @@
-# Marvin: assistente pessoal, mordomo digital e porta de entrada da Shack.
+# Renfield: assistente pessoal, mordomo digital e porta de entrada da Shack.
 # Edite à vontade. O servidor recarrega este arquivo sozinho.
-id: marvin
-name: Marvin
+id: renfield
+name: Renfield
 role: Assistente pessoal e orquestrador
 
 # Apelidos dos modelos do seu plano, em ordem de preferência.

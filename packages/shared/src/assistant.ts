@@ -109,7 +109,7 @@ export const NoteInput = z.object({ title: z.string().trim().max(200).default(''
 export const NotePatch = z.object({ title: z.string().trim().max(200).optional(), content: z.string().max(20_000).optional() });
 
 /* ---------- notificações ---------- */
-export const NotificationKind = z.enum(['reminder', 'alarm', 'timer', 'task', 'digest', 'marvin', 'test']);
+export const NotificationKind = z.enum(['reminder', 'alarm', 'timer', 'task', 'digest', 'renfield', 'test']);
 export const ShackNotification = z.object({
   id: z.string(),
   title: z.string(),

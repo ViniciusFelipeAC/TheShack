@@ -5,7 +5,7 @@ import type { AgentDef } from '../core/registry.ts';
 import { type AgentRunner, type RunIO, SHUTDOWN_REASON } from '../core/task-bus.ts';
 import type { Workspaces } from '../core/workspaces.ts';
 import { errorMessage } from '../errors.ts';
-import type { Account } from '../marvin/account.ts';
+import type { Account } from '../renfield/account.ts';
 import { finishBranch, type GitOutcome, type GitSession, startBranch } from './git.ts';
 import { describeTool, workspaceGuard } from './guard.ts';
 import { Inbox } from './inbox.ts';

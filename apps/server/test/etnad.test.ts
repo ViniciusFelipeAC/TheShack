@@ -7,7 +7,7 @@ import type { Task, Workspace } from '@shack/shared';
 import { finishBranch, git, startBranch } from '../src/agents/git.ts';
 import { checkToolInput, describeTool } from '../src/agents/guard.ts';
 import { ROOT } from '../src/config.ts';
-import { marvinTools } from '../src/marvin/tools.ts';
+import { renfieldTools } from '../src/renfield/tools.ts';
 import { setup, waitFor } from './helpers.ts';
 
 const hasGit = (() => { try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
@@ -42,16 +42,16 @@ test('o etnaD exige um workspace que exista', async (t) => {
   assert.equal(wrong.body.error.code, 'unknown_workspace');
 });
 
-test('no modo real, o Marvin não recebe tarefas: ele conversa', async (t) => {
+test('no modo real, o Renfield não recebe tarefas: ele conversa', async (t) => {
   const s = setup({ productionRunners: true }); t.after(s.cleanup);
-  const r = await s.call('POST', '/tasks', { assignee: 'marvin', title: 'x', prompt: 'y' });
+  const r = await s.call('POST', '/tasks', { assignee: 'renfield', title: 'x', prompt: 'y' });
   assert.equal(r.status, 409);
   assert.equal(r.body.error.code, 'agent_cannot_run');
 });
 
-test('o Marvin escolhe o workspace ao delegar', async (t) => {
+test('o Renfield escolhe o workspace ao delegar', async (t) => {
   const s = setup(); t.after(s.cleanup);
-  const tools = marvinTools({ tasks: s.shack.tasks, registry: s.shack.registry, mind: s.shack.mind, workspaces: s.shack.workspaces });
+  const tools = renfieldTools({ tasks: s.shack.tasks, registry: s.shack.registry, mind: s.shack.mind, workspaces: s.shack.workspaces });
   const create = tools.find((x) => x.name === 'tasks_create')!;
   const ctx = { conversationId: 'main' };
 
@@ -70,7 +70,7 @@ test('"sim" no chat não responde a uma pergunta aberta', async (t) => {
   const s = setup(); t.after(s.cleanup);
   s.shack.approvals.request({ agentId: 'etnad', kind: 'question', summary: 'Qual banco usar?', options: ['SQLite', 'Postgres'] });
   await s.call('POST', '/conversations/main/messages?wait=true', { text: 'sim' });
-  assert.equal(s.engine.turns.length, 1, 'virou uma mensagem normal para o Marvin');
+  assert.equal(s.engine.turns.length, 1, 'virou uma mensagem normal para o Renfield');
   assert.equal(s.shack.approvals.pending().length, 1, 'a pergunta continua aberta');
 });
 

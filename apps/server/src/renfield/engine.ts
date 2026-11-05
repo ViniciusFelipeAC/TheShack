@@ -8,11 +8,14 @@ import { Inbox } from '../agents/inbox.ts';
 import type { Approvals } from '../core/approvals.ts';
 import { errorMessage, HttpError } from '../errors.ts';
 import type { Account } from './account.ts';
-import type { MarvinTool, ToolContext } from './tools.ts';
+import { type AttachmentData, attachmentBlocks } from './attachments.ts';
+import type { RenfieldTool, ToolContext } from './tools.ts';
 
 export type TurnInput = {
   conversationId: string;
   text: string;
+  /** Fotos, PDFs e textos anexados a esta mensagem. */
+  attachments: AttachmentData[];
   context: string;
   systemPrompt: string;
   manifest: AgentManifest;
@@ -20,7 +23,7 @@ export type TurnInput = {
   onActivity(text: string): void;
 };
 
-/** Quem gera as respostas do Marvin. O servidor usa o Agent SDK; os testes usam um motor falso. */
+/** Quem gera as respostas do Renfield. O servidor usa o Agent SDK; os testes usam um motor falso. */
 export interface ChatEngine {
   turn(input: TurnInput): Promise<{ text: string }>;
   reset(conversationId?: string): void;
@@ -32,17 +35,25 @@ const ACTIVITY: Record<string, string> = {
   agents_status: 'Verificando a casa', tasks_list: 'Consultando as tarefas', tasks_get: 'Consultando uma tarefa',
   tasks_create: 'Delegando uma tarefa', tasks_cancel: 'Cancelando uma tarefa', tasks_answer: 'Respondendo a uma tarefa',
   memory_add: 'Anotando', memory_update: 'Corrigindo uma anotação', memory_search: 'Procurando nas anotações', rules_add: 'Aprendendo uma regra',
+  calendar_list: 'Consultando a agenda', calendar_create: 'Marcando na agenda', lists_all: 'Olhando as listas', lists_add: 'Anotando na lista',
+  lists_check: 'Riscando da lista',
 };
+// O resto, pelo grupo: o quadro e o chat mostram o que ele está mexendo, em vez de só "Trabalhando".
+const ACTIVITY_GROUP: Record<string, string> = {
+  calendar: 'Mexendo na agenda', lists: 'Arrumando as listas', reminders: 'Cuidando dos lembretes', timers: 'Cuidando dos timers',
+  notes: 'Mexendo nas notas', notify: 'Mandando um aviso', memory: 'Revendo as anotações', rules: 'Revendo as regras', tasks: 'Cuidando das tarefas',
+};
+export const activityOf = (tool: string): string => ACTIVITY[tool] ?? ACTIVITY_GROUP[tool.split('_')[0]!] ?? 'Trabalhando';
 
 /** Falha de uma ferramenta, dita de um jeito que o modelo não confunda com "não há nada". */
-export function toolFailure(t: Pick<MarvinTool, 'reads'>, err: unknown): string {
+export function toolFailure(t: Pick<RenfieldTool, 'reads'>, err: unknown): string {
   return t.reads
     ? `Indisponível: a consulta falhou (${errorMessage(err)}). Não há dados desta chamada. Diga ao dono da casa que a informação está indisponível; não responda como se a lista estivesse vazia.`
     : `Erro: ${errorMessage(err)} Nada foi feito.`;
 }
 
-/** Servidor MCP in-process com as ferramentas do Marvin. Os argumentos chegam já ajustados pelos schemas tolerantes. */
-export function buildToolServer(tools: MarvinTool[], ctx: ToolContext) {
+/** Servidor MCP in-process com as ferramentas do Renfield. Os argumentos chegam já ajustados pelos schemas tolerantes. */
+export function buildToolServer(tools: RenfieldTool[], ctx: ToolContext) {
   return createSdkMcpServer({
     name: MCP_SERVER,
     version: '1.0.0',
@@ -79,7 +90,7 @@ class LiveSession {
   async #read(): Promise<void> {
     try {
       for await (const m of this.q) this.#on(m);
-      this.#fail(new Error('A sessão do Marvin terminou.'));
+      this.#fail(new Error('A sessão do Renfield terminou.'));
     } catch (err) {
       this.#fail(err);
     } finally {
@@ -110,7 +121,7 @@ class LiveSession {
         if (e.type === 'content_block_delta' && e.delta.type === 'text_delta') p.input.onDelta(e.delta.text);
         if (e.type === 'content_block_start' && e.content_block.type === 'tool_use') {
           const name = e.content_block.name.replace(`mcp__${MCP_SERVER}__`, '');
-          p.input.onActivity(ACTIVITY[name] ?? 'Trabalhando');
+          p.input.onActivity(activityOf(name));
         }
         return;
       }
@@ -137,7 +148,7 @@ class LiveSession {
       this.#pending = { resolve, reject, parts: [], input };
       this.#inbox.push({
         type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: input.context }, { type: 'text', text: input.text }] },
+        message: { role: 'user', content: [{ type: 'text', text: input.context }, ...attachmentBlocks(input.attachments), { type: 'text', text: input.text }] },
         parent_tool_use_id: null,
       } as SDKUserMessage);
     });
@@ -152,7 +163,7 @@ class LiveSession {
 
 export type SdkEngineOptions = {
   agentId: string;
-  tools: MarvinTool[];
+  tools: RenfieldTool[];
   account: Account;
   approvals: Approvals;
   fallbackModel: string;
@@ -204,7 +215,7 @@ export class SdkEngine implements ChatEngine {
       if (!confirm.has(short)) return { behavior: 'deny', message: 'Ferramenta não permitida.' };
       const { answer } = this.#o.approvals.request({
         agentId: this.#o.agentId, kind: 'destructive',
-        summary: `O Marvin quer usar "${short}". Confirma?`, detail: { tool: short, input: toolInput },
+        summary: `O Renfield quer usar "${short}". Confirma?`, detail: { tool: short, input: toolInput },
       });
       const res = await answer;
       return res.decision === 'approve' ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: 'O dono da casa não confirmou.' };

@@ -5,6 +5,7 @@ import { Dock, type Section, SECTIONS, TopBar, Welcome, Zoom } from './Hud.tsx';
 import { api, ApiError, type Connection, Live, tokenStore } from './live.ts';
 import { NotificationsPanel, Toasts } from './Notifications.tsx';
 import { AgendaPage } from './pages/Agenda.tsx';
+import { BoardPage } from './pages/Board.tsx';
 import { ChatPanel } from './pages/Chat.tsx';
 import { ListsPage } from './pages/Lists.tsx';
 import { NotesPage } from './pages/Notes.tsx';
@@ -153,7 +154,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  /** Memórias e regras que o Marvin anotou sozinho e você ainda não conferiu. */
+  /** Memórias e regras que o Renfield anotou sozinho e você ainda não conferiu. */
   const countReview = useCallback(async () => {
     const [mems, rules] = await Promise.all([api<Memory[]>('/memories'), api<Rule[]>('/rules')]);
     setToReview(mems.filter((m) => m.isNew).length + rules.filter((r) => r.isNew).length);
@@ -182,7 +183,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
         const { message, streamId } = data as { message: ChatMessage; streamId: string | null };
         setMessages((ms) => (ms.some((m) => m.id === message.id) ? ms : [...ms, message]));
         if (streamId) setStreams((s) => { const n = { ...s }; delete n[streamId]; return n; });
-        // O Marvin pode ter anotado algo nesta resposta.
+        // O Renfield pode ter anotado algo nesta resposta.
         if (message.role === 'assistant') countReview().catch(() => {});
         break;
       }
@@ -230,9 +231,9 @@ function Shell({ onLogout }: { onLogout(): void }) {
     return () => l.stop();
   }, [apply, refresh, onLogout]);
 
-  const send = (text: string, style: ChatStyle) => {
-    const sent = live.current?.send({ type: 'chat.send', conversationId: 'main', text, style, clientId: crypto.randomUUID() });
-    if (!sent) api('/conversations/main/messages', { method: 'POST', body: { text, style } }).catch(() => {});
+  const send = (text: string, style: ChatStyle, attachmentIds: string[] = []) => {
+    const sent = live.current?.send({ type: 'chat.send', conversationId: 'main', text, style, attachmentIds, clientId: crypto.randomUUID() });
+    if (!sent) api('/conversations/main/messages', { method: 'POST', body: { text, style, attachmentIds } }).catch(() => {});
   };
   const respond = (id: string, decision: 'approve' | 'deny', answer?: string) => {
     if (!live.current?.send({ type: 'approval.respond', approvalId: id, decision, answer })) {
@@ -273,6 +274,8 @@ function Shell({ onLogout }: { onLogout(): void }) {
     [agents],
   );
   const focused = agents.find((a) => a.id === focusId) ?? null;
+  const butler = agents.find((a) => a.chat) ?? null;
+  const lastReply = useMemo(() => [...messages].reverse().find((m) => m.role === 'assistant' && m.kind !== 'task_notice') ?? null, [messages]);
   const quota = account?.quota ?? null;
   const quotaBlocked = quota?.status === 'rejected';
   const resetsAt = quota?.resetsAt ? resetText(quota.resetsAt) : null;
@@ -293,7 +296,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
           {account?.subscriptionOk === false && <p className="notice err glass">{account.problem} Entre com a sua assinatura usando /login no Claude Code.</p>}
           {quotaBlocked && <p className="notice warn glass">A cota do seu plano acabou por enquanto{resetsAt ? ` e volta ${resetsAt}` : ''}. Os agentes foram descansar e a fila espera.</p>}
           {quota?.status === 'allowed_warning' && (
-            <p className="notice warn glass">A cota está perto do limite{quota.percent !== null ? ` (${Math.round(quota.percent)}% usado)` : ''}{resetsAt ? ` e renova ${resetsAt}` : ''}. O Marvin vai confirmar com você antes de mandar tarefas novas ao etnaD.</p>
+            <p className="notice warn glass">A cota está perto do limite{quota.percent !== null ? ` (${Math.round(quota.percent)}% usado)` : ''}{resetsAt ? ` e renova ${resetsAt}` : ''}. O Renfield vai confirmar com você antes de mandar tarefas novas ao etnaD.</p>
           )}
           {quota?.overage && <p className="notice err glass">O Claude Code indicou uso de cobrança extra (overage). A Shack é de custo zero: confira os limites de gasto da sua conta no claude.ai.</p>}
         </div>
@@ -307,6 +310,12 @@ function Shell({ onLogout }: { onLogout(): void }) {
         )}
         {section && (
           <div className="sheet">
+            {section === 'quadro' && (
+              <BoardPage
+                calendarVersion={versions.calendar} listsVersion={versions.lists} agent={butler} lastReply={lastReply}
+                onSend={(text) => send(text, 'short')} onOpen={go}
+              />
+            )}
             {section === 'agenda' && <AgendaPage version={versions.calendar} />}
             {section === 'lembretes' && <RemindersPage remindersVersion={versions.reminders} timersVersion={versions.timers} />}
             {section === 'listas' && <ListsPage version={versions.lists} />}
@@ -321,7 +330,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
 
       <ChatPanel
         messages={messages} streams={streams} agents={agents} approvals={approvals}
-        open={chatOpen} onOpenChange={setChatOpen} prefill={prefill} onSend={send} onRespond={respond}
+        open={chatOpen} onOpenChange={setChatOpen} prefill={prefill} onSend={send} onRespond={respond} onBoard={() => go('quadro')}
       />
 
       <Toasts items={toasts} onClose={closeToast} onOpenTask={openTask} />

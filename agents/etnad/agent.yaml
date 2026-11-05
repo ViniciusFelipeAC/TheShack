@@ -31,7 +31,7 @@ limits:
   concurrency: 1
   maxTurns: 300
 
-# Como ele aparece na casa. As opções estão comentadas no agent.yaml do Marvin.
+# Como ele aparece na casa. As opções estão comentadas no agent.yaml do Renfield.
 appearance:
   palette:
     skin: "#c08560"

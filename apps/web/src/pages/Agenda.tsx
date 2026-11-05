@@ -37,7 +37,7 @@ export function AgendaPage({ version }: { version: number }) {
 
   return (
     <main className="page panel">
-      <header className="page-head"><h2>Agenda</h2><p className="muted small">Próximos 14 dias. Você também pode pedir ao Marvin: "marca dentista sexta às 15h".</p></header>
+      <header className="page-head"><h2>Agenda</h2><p className="muted small">Próximos 14 dias. Você também pode pedir ao Renfield: "marca dentista sexta às 15h".</p></header>
       <div className="page-body">
         {events === null && <p className="muted">Carregando…</p>}
         {events?.length === 0 && <p className="muted">Nada marcado nos próximos 14 dias.</p>}

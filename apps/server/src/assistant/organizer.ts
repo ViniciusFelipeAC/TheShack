@@ -87,7 +87,7 @@ export class Lists {
     return this.get(id);
   }
 
-  /** Item por id ou pelo texto (parcial, sem diferenciar maiúsculas). Usado pelo Marvin. */
+  /** Item por id ou pelo texto (parcial, sem diferenciar maiúsculas). Usado pelo Renfield. */
   findItem(list: TodoList, ref: string): ListItem | null {
     const lower = ref.toLowerCase();
     return list.items.find((i) => i.id === ref) ?? list.items.find((i) => i.text.toLowerCase() === lower)

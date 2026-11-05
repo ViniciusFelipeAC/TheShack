@@ -1,6 +1,6 @@
-import type { ChatEngine, TurnInput } from '../src/marvin/engine.ts';
+import type { ChatEngine, TurnInput } from '../src/renfield/engine.ts';
 
-/** Motor falso do Marvin: não chama modelo nenhum. Os testes trocam o `handler` para simular ferramentas. */
+/** Motor falso do Renfield: não chama modelo nenhum. Os testes trocam o `handler` para simular ferramentas. */
 export class FakeEngine implements ChatEngine {
   turns: TurnInput[] = [];
   active = 0;

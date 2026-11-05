@@ -1,13 +1,14 @@
 # The Shack
 
-Sistema pessoal de agentes de IA. O Marvin é o mordomo e a porta de entrada; o etnaD é o agente de programação. Plano completo em [docs/PLAN.md](docs/PLAN.md) e referência da API em [docs/API.md](docs/API.md).
+Sistema pessoal de agentes de IA. O Renfield é o mordomo e a porta de entrada; o etnaD é o agente de programação. Plano completo em [docs/PLAN.md](docs/PLAN.md) e referência da API em [docs/API.md](docs/API.md).
 
 **Estado atual:** Fase 7, a última do plano. A tela principal é a casa: uma casa de vidro numa floresta enevoada, onde cada agente tem a sua mesa e anda pela casa conforme o que está fazendo de verdade. A Shack instala no iPhone como app, pelo Tailscale.
 
-- **O Marvin e o etnaD** conversam e programam de verdade, os dois pelo Agent SDK e só com o login da sua assinatura.
-- **A Shack também tem** agenda, lembretes, alarmes, timers, listas, notas e notificações, pelo chat e por telas próprias.
+- **O Renfield e o etnaD** conversam e programam de verdade, os dois pelo Agent SDK e só com o login da sua assinatura.
+- **A Shack também tem** agenda, lembretes, alarmes, timers, listas, notas e notificações, pelo chat e por telas próprias. O **Quadro** junta o calendário, a lista de compras e os afazeres numa tela só.
+- **Anexos:** mande fotos, PDFs e arquivos de texto ao Renfield pelo **+** ao lado da caixa de texto, colando com Ctrl+V ou arrastando para o chat.
 
-- **O Marvin:** lembra de você, aprende regras e delega ao etnaD.
+- **O Renfield:** lembra de você, aprende regras e delega ao etnaD.
 - **O etnaD:** trabalha num branch próprio dentro das pastas que você cadastrar. Ele pede sua aprovação para comandos fora da lista e entrega um relatório com o que mudou, onde e como testar.
 
 ## Requisitos
@@ -26,9 +27,9 @@ npm run token -- --name "Meu PC"
 npm run dev
 ```
 
-- `npm test` roda os testes dos fluxos principais. Eles usam um Marvin falso e não gastam cota.
+- `npm test` roda os testes dos fluxos principais. Eles usam um Renfield falso e não gastam cota.
 - `npm run token` cria o token do seu dispositivo. Guarde o valor que começa com `shk_`, porque ele não aparece de novo.
-- `npm run dev` sobe o servidor e o app web juntos. Abra **http://127.0.0.1:5173**, cole o token e converse com o Marvin. Ctrl+C encerra tudo.
+- `npm run dev` sobe o servidor e o app web juntos. Abra **http://127.0.0.1:5173**, cole o token e converse com o Renfield. Ctrl+C encerra tudo.
 
 Para mudar porta, banco ou pasta dos agentes, copie `.env.example` para `.env` e edite. O app web segue o `SHACK_PORT` do mesmo arquivo.
 
@@ -40,6 +41,18 @@ npm start
 ```
 
 Depois de mudar o código do app, rode `npm run build` de novo. O servidor pega o build novo sem reiniciar.
+
+### Atalho na Área de Trabalho
+
+```powershell
+npm run shortcut
+```
+
+Cria o atalho **The Shack**. Ao abrir, ele sobe o servidor numa janela minimizada, "The Shack (servidor)", e abre o app numa janela própria do Edge. Se o servidor já estiver no ar, só abre o app. Se o código do app mudou desde o último build (depois de um `git pull`, por exemplo), ele roda `npm run build` antes. Para desligar o servidor, feche aquela janela.
+
+O app em `:4321` guarda o login separado do `:5173` do `npm run dev`. Na primeira vez, cole o token de novo ou pareie com um código.
+
+Rode `npm run shortcut` uma vez em cada máquina, porque o atalho aponta para a pasta do projeto dela.
 
 ## No iPhone
 
@@ -60,7 +73,7 @@ O iPhone só instala apps da web e só entrega notificações com HTTPS. O Tails
 
 - **O que cada agente faz.** Quando está livre, ele toma café, lê no sofá, rega as plantas ou olha a neblina. Quando recebe uma tarefa, vai até a mesa, senta e digita, e os monitores mostram atividade.
 - **Quando alguém precisa de você,** ele levanta, vira para você e aparece um balão "?". Um erro acende um "x" vermelho na tela e sobe um fiozinho de fumaça.
-- **Enquanto o Marvin responde no chat,** aparece um balão de "digitando" sobre ele.
+- **Enquanto o Renfield responde no chat,** aparece um balão de "digitando" sobre ele.
 - **Se a cota do plano acabar,** quem está livre vai cochilar no sofá até ela voltar.
 - **Cartões no canto de baixo:** mostram cada agente e o que ele está fazendo. Toque num cartão ou no personagem para abrir o painel, com a tarefa atual, o progresso, a fila, o histórico com os relatórios e os botões de aprovar, cancelar e tentar de novo.
 - **Chat:** fica sempre ao lado. No celular, é a gaveta de baixo; toque em **Abrir**.
@@ -74,7 +87,7 @@ O iPhone só instala apps da web e só entrega notificações com HTTPS. O Tails
 1. No app, abra **Menu**, depois **Configurações**, depois **Workspaces**, e cadastre a pasta de um projeto com o caminho completo, por exemplo `C:\Users\voce\projetos\meu-app`.
 2. Peça no chat, por exemplo: "Peça ao etnaD para adicionar testes no módulo de datas do meu-app".
 3. Veja o etnaD ir até a mesa e trabalhar, e toque nele para acompanhar o progresso. Se ele precisar rodar um comando fora da lista, aparece um cartão com Aprovar e Negar, no chat e no painel dele. Se tiver uma dúvida, aparece um cartão com as opções.
-4. No fim, o Marvin posta o relatório no chat. Em projetos git, as mudanças ficam num branch `etnad/...`, e o seu branch não é tocado. Para revisar, use o comando que vem no relatório, por exemplo `git diff main..etnad/...`.
+4. No fim, o Renfield posta o relatório no chat. Em projetos git, as mudanças ficam num branch `etnad/...`, e o seu branch não é tocado. Para revisar, use o comando que vem no relatório, por exemplo `git diff main..etnad/...`.
 
 **O servidor confere o relatório.** Em projetos git, ele compara o que o etnaD disse com o diff de verdade. Se o relatório citar mudanças que o git não mostra, a tarefa aparece como **suspeita**: o aviso sobe de prioridade, o etnaD fica com o sinal de erro na casa e o painel mostra o que mudou de fato. Sem git, o aviso diz que não deu para conferir.
 
@@ -84,12 +97,13 @@ Comandos que rodam sem perguntar: os de leitura e os de teste do manifesto, como
 
 Para testar a interface sem gastar cota, ponha `SHACK_RUNNER=simulated` no `.env`. Assim o etnaD só finge trabalhar.
 
-## O que dá para pedir ao Marvin
+## O que dá para pedir ao Renfield
 
 - "Me lembra de tomar o remédio todo dia útil às 8h."
 - "Me acorda amanhã às 6h30." Vira um alarme, que toca até você dispensar.
 - "Marca dentista sexta às 15h." E também: "O que tenho amanhã?"
-- "Coloca leite e café na lista do mercado."
+- "Coloca leite e café na lista de compras." Ela é a lista Mercado, e "to-do" é a lista Afazeres.
+- Uma foto da geladeira ou o PDF de uma conta, com "o que falta comprar?" ou "quando vence?".
 - "Começa um timer de 10 minutos pro macarrão."
 - "Anota a senha do Wi-Fi da praia: mar123."
 - "O que o etnaD está fazendo?"
@@ -98,7 +112,11 @@ Para testar a interface sem gastar cota, ponha `SHACK_RUNNER=simulated` no `.env
 - "Quando eu disser 'modo foco', ative o modo foco." Ele aprende uma regra com gatilho.
 - "/feedback não use listas." Vira uma regra marcada como nova nas configurações.
 
-As mesmas coisas também têm telas próprias, nas abas **Agenda**, **Lembretes**, **Listas** e **Notas**.
+As mesmas coisas também têm telas próprias, nas abas **Quadro**, **Agenda**, **Lembretes**, **Listas** e **Notas**.
+
+**O Quadro** abre pelo Menu ou pelo botão **Quadro** no topo do chat. Ele mostra o mês com os compromissos, a agenda do dia escolhido, a lista de compras e os afazeres, e tudo se edita ali mesmo. É o mesmo dado que o Renfield usa: o que ele muda pelo chat entra no Quadro na hora, piscando, e no alto do Quadro há uma caixa para pedir a ele sem sair da tela.
+
+**Anexos.** Toque no **+** à esquerda da caixa de texto. No iPhone, ele oferece Fototeca, Câmera e Arquivos. No computador, também dá para colar uma imagem com Ctrl+V ou arrastar arquivos para o chat. Vão até 5 por mensagem: fotos (até 5 MB, reduzidas antes de subir), PDFs (até 10 MB) e textos (até 512 KB). Planilhas e documentos do Word não entram; exporte como PDF. Cada anexo pesa na cota, e continua pesando nas respostas seguintes da mesma conversa.
 
 Em **Menu**, depois **Configurações**, você vê e edita a persona, as memórias, as regras, o modo ativo, os workspaces, as notificações e a conta. Quando um agente pede aprovação, aparece um cartão com Aprovar e Negar, e você também pode responder "sim" ou "não" no chat.
 
@@ -116,7 +134,7 @@ Quem dispara é o servidor, então o computador com a Shack precisa estar ligado
 
 A Shack nunca lê nem guarda o seu login. Quem autentica é o Claude Code oficial, e o servidor remove do ambiente qualquer variável que geraria cobrança por uso, como `ANTHROPIC_API_KEY`. Na primeira conversa, ele confere se a credencial é a da assinatura. Se não for, nada é enviado ao modelo. O uso conta na mesma cota que você usa no Claude Code e no claude.ai.
 
-**Medidor de cota.** A barra do topo mostra quanto da janela atual do plano já foi usado (aparece depois da primeira resposta; antes disso, "–"). Perto do limite, sai um aviso, e o Marvin confirma com você antes de mandar uma tarefa nova ao etnaD. Se o Claude Code indicar cobrança extra, aparece um aviso vermelho. Os detalhes de cada janela ficam em **Configurações**, **Conta**.
+**Medidor de cota.** A barra do topo mostra quanto da janela atual do plano já foi usado (aparece depois da primeira resposta; antes disso, "–"). Perto do limite, sai um aviso, e o Renfield confirma com você antes de mandar uma tarefa nova ao etnaD. Se o Claude Code indicar cobrança extra, aparece um aviso vermelho. Os detalhes de cada janela ficam em **Configurações**, **Conta**.
 
 ## Teste rápido pelo PowerShell
 
@@ -125,7 +143,7 @@ Com o servidor no ar, num segundo terminal:
 ```powershell
 $h = @{ Authorization = "Bearer shk_COLE_SEU_TOKEN" }
 $api = "http://127.0.0.1:4321/api/v1"
-$json = '{"text":"Boa tarde, Marvin. O que o etnaD está fazendo?"}'
+$json = '{"text":"Boa tarde, Renfield. O que o etnaD está fazendo?"}'
 (Invoke-RestMethod "$api/conversations/main/messages?wait=true" -Method Post -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json))).reply.text
 ```
 
@@ -148,7 +166,7 @@ Cada agente vive em `agents/<id>/`. O `agent.yaml` define nome, papel, modelos, 
 
 Os modelos são apelidos em ordem de preferência, por exemplo `[sonnet, haiku]`. O servidor usa o primeiro que o seu plano oferecer.
 
-**Aparência na casa:** fica em `appearance`, no `agent.yaml`. As opções estão comentadas no manifesto do Marvin.
+**Aparência na casa:** fica em `appearance`, no `agent.yaml`. As opções estão comentadas no manifesto do Renfield.
 
 - `palette`: as cores da pele, do cabelo, da roupa, do detalhe, da calça e do sapato.
 - `hair`: `neat` ou `messy`.

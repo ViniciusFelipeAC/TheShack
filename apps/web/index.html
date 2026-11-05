@@ -18,9 +18,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Manrope:wght@400;500;600;700&display=swap" />
+    <!-- Aviso de partida com estilo próprio: se o código do app não carregar, o CSS dele também não vem. -->
+    <style>
+      html, body { margin: 0; background: #070a0b; }
+      .boot { min-height: 100vh; margin: 0; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 12px; background: #070a0b; color: #e7ece9; font: 16px/1.5 system-ui, sans-serif; text-align: center; }
+      .boot p { margin: 0; }
+      .boot-hint { opacity: 0; animation: boot-show 0s 6s forwards; color: #95a19e; }
+      @keyframes boot-show { to { opacity: 1; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- O React troca este aviso pelo app. Se ele ficar, o código não chegou: sem isso, o iPhone mostrava só uma tela branca. -->
+    <div id="root"><div class="boot"><p>Abrindo a Shack…</p><p class="boot-hint">Está demorando? O celular não está alcançando o PC. Confira se o PC está ligado com a Shack no ar e se o Tailscale está conectado no PC e no celular. Depois, feche o app e abra de novo.</p></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

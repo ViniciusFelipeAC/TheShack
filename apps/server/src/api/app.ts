@@ -11,12 +11,12 @@ import { HttpError } from '../errors.ts';
 import { remoteInfo } from '../system/remote.ts';
 import type { Shack } from '../shack.ts';
 import { type Env, ERRORS, IdParam, J } from './common.ts';
-import { registerMarvinRoutes } from './marvin-routes.ts';
+import { registerRenfieldRoutes } from './renfield-routes.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import { registerAssistantRoutes } from './assistant-routes.ts';
 import { WsHub, wsHandler } from './ws.ts';
 
-export const API_VERSION = '0.7.0';
+export const API_VERSION = '0.8.0';
 
 const PUBLIC_PATHS = new Set(['/api/v1/health', '/api/v1/auth/pair', '/api/v1/openapi.json', '/api/v1/ws']);
 
@@ -206,7 +206,7 @@ export function createApp(shack: Shack) {
     return c.json({ items, nextSince: items.length ? items[items.length - 1]!.seq : q.since }, 200);
   });
 
-  registerMarvinRoutes(api, shack);
+  registerRenfieldRoutes(api, shack);
   registerWorkspaceRoutes(api, shack);
   registerAssistantRoutes(api, shack);
 

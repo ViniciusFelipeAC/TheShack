@@ -6,23 +6,36 @@ import { fmtWhen, parseWhen } from '../assistant/time.ts';
 import type { Timers } from '../assistant/timers.ts';
 import type { Notifier } from '../notifications/notifier.ts';
 import { bool, id, num, priority, text, textList, when as whenArg } from './lenient.ts';
-import { listOut, type MarvinTool } from './tools.ts';
+import { listOut, type RenfieldTool } from './tools.ts';
 
 const out = (v: unknown) => JSON.stringify(v);
 const WHEN = 'ISO 8601, por exemplo 2026-10-22T08:00 (sem fuso vale o fuso da casa)';
+
+/** As duas listas do Quadro. Pelo id, que não muda quando o nome muda. */
+export const BOARD_LISTS = { shopping: 'mercado', todo: 'afazeres' } as const;
+const ALIASES: Array<[RegExp, string]> = [
+  [/^(a )?(lista (de |do )?)?(compras?|supermercado|mercado|feira)$/i, BOARD_LISTS.shopping],
+  [/^(a )?(lista (de |do )?)?(to[ -]?dos?|afazeres|pend[eê]ncias|coisas a fazer|o que fazer)$/i, BOARD_LISTS.todo],
+];
+
+/** "lista de compras" é a Mercado e "to-do" é a Afazeres, as duas do Quadro, mesmo que tenham outro nome. */
+export function listAlias(ref: string, lists: Pick<Lists, 'find'>): TodoList | null {
+  const target = ALIASES.find(([re]) => re.test(ref.trim()))?.[1];
+  return target ? lists.find(target) : null;
+}
 
 export type AssistantDeps = {
   calendar: CalendarProvider; reminders: Reminders; timers: Timers; lists: Lists; notes: Notes; notifier: Notifier; timezone: string;
 };
 
-export function assistantTools(d: AssistantDeps): MarvinTool[] {
+export function assistantTools(d: AssistantDeps): RenfieldTool[] {
   const tz = d.timezone;
   const when = (iso: string | null) => (iso ? fmtWhen(iso, tz) : null);
   const occ = (e: CalendarOccurrence) => ({ id: e.id, title: e.title, start: when(e.occurrenceStart), end: when(e.occurrenceEnd), allDay: e.allDay, location: e.location, recurring: Boolean(e.rrule) });
   const rem = (r: Reminder) => ({ id: r.id, text: r.text, kind: r.kind, next: when(r.snoozedUntil ?? r.nextFireAt), recurring: r.cron, ringing: r.ringing, status: r.status });
   const list = (l: TodoList) => ({ id: l.id, name: l.name, items: l.items.map((i) => `${i.done ? '[x]' : '[ ]'} ${i.text}`) });
   const findList = (ref: string, create = false): TodoList => {
-    const l = d.lists.find(ref);
+    const l = d.lists.find(ref) ?? listAlias(ref, d.lists);
     if (l) return l;
     if (create) return d.lists.create(ref);
     throw new Error(`Não existe lista "${ref}". Listas: ${d.lists.all().map((x) => x.name).join(', ')}.`);
@@ -160,7 +173,7 @@ export function assistantTools(d: AssistantDeps): MarvinTool[] {
     },
     {
       name: 'lists_add', group: 'lists',
-      description: 'Adiciona itens a uma lista (por nome, por exemplo "Mercado"). Cria a lista se ela não existir.',
+      description: 'Adiciona itens a uma lista (por nome). Compras vão para "Mercado" e afazeres (to-do) para "Afazeres": as duas aparecem no Quadro. Cria a lista se ela não existir.',
       shape: { list: text(60, 1), items: textList({ maxItems: 50, maxLength: 200 }) },
       run: (a) => { const l = findList(String(a.list), true); return out({ list: list(d.lists.addItems(l.id, a.items as string[])) }); },
     },
@@ -242,7 +255,7 @@ export function assistantTools(d: AssistantDeps): MarvinTool[] {
       name: 'notify_user', group: 'notify',
       description: 'Manda uma notificação ao dono da casa (aparece no app e no navegador). O modo ativo pode segurar avisos de prioridade baixa.',
       shape: { title: text(120, 1), body: text(1000), priority: priority().optional() },
-      run: (a) => out({ sent: d.notifier.notify({ title: String(a.title), body: String(a.body), priority: (a.priority as 'low' | 'normal' | 'high') ?? 'normal', kind: 'marvin' }).id }),
+      run: (a) => out({ sent: d.notifier.notify({ title: String(a.title), body: String(a.body), priority: (a.priority as 'low' | 'normal' | 'high') ?? 'normal', kind: 'renfield' }).id }),
     },
   ];
 }

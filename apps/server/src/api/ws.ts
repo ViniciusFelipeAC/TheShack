@@ -66,7 +66,7 @@ export function wsHandler(shack: Shack, hub: WsHub) {
           }
           return;
         case 'chat.send':
-          try { shack.chat.send(msg.conversationId, msg.text, msg.style ?? 'normal', d.id); } catch (err) {
+          try { shack.chat.send(msg.conversationId, msg.text, msg.style ?? 'normal', d.id, msg.attachmentIds ?? []); } catch (err) {
             fail(err instanceof HttpError ? err.code : 'internal', errorMessage(err));
           }
           return;

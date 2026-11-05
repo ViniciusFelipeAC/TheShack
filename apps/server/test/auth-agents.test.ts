@@ -21,10 +21,10 @@ test('pareamento cria um dispositivo novo, e revogar derruba o token', async (t)
 
 test('persona: lê e grava o arquivo do agente', async (t) => {
   const s = setup(); t.after(s.cleanup);
-  assert.match((await s.call('GET', '/agents/marvin/persona')).body.content, /Marvin/);
-  await s.call('PUT', '/agents/marvin/persona', { content: '# Novo Marvin\nMais sucinto.' });
-  assert.equal(readFileSync(join(s.agentsDir, 'marvin', 'persona.md'), 'utf8'), '# Novo Marvin\nMais sucinto.');
-  assert.match((await s.call('GET', '/agents/marvin/persona')).body.content, /Mais sucinto/);
+  assert.match((await s.call('GET', '/agents/renfield/persona')).body.content, /Renfield/);
+  await s.call('PUT', '/agents/renfield/persona', { content: '# Novo Renfield\nMais sucinto.' });
+  assert.equal(readFileSync(join(s.agentsDir, 'renfield', 'persona.md'), 'utf8'), '# Novo Renfield\nMais sucinto.');
+  assert.match((await s.call('GET', '/agents/renfield/persona')).body.content, /Mais sucinto/);
 });
 
 test('manifesto inválido desativa só aquele agente', async (t) => {
@@ -40,7 +40,7 @@ test('manifesto inválido desativa só aquele agente', async (t) => {
   assert.equal(broken.status, 'disabled');
   assert.match(broken.manifestError ?? '', /role/);
   assert.match(agents.find((a) => a.id === 'trocado')!.manifestError ?? '', /nome da pasta/);
-  assert.equal(agents.find((a) => a.id === 'marvin')!.status, 'idle');
+  assert.equal(agents.find((a) => a.id === 'renfield')!.status, 'idle');
 
   const r = await s.call('POST', '/tasks', { assignee: 'quebrado', title: 'x', prompt: 'y' });
   assert.equal(r.body.error.code, 'agent_disabled');

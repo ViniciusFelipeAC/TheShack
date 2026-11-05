@@ -16,6 +16,48 @@ export type Conversation = z.infer<typeof Conversation>;
 export const MessageKind = z.enum(['text', 'task_notice', 'error']);
 export type MessageKind = z.infer<typeof MessageKind>;
 
+/* ---------- anexos ---------- */
+export const AttachmentKind = z.enum(['image', 'pdf', 'text']);
+export type AttachmentKind = z.infer<typeof AttachmentKind>;
+
+export const Attachment = z.object({
+  id: z.string(),
+  name: z.string(),
+  mime: z.string(),
+  kind: AttachmentKind,
+  size: z.number().int(),
+  createdAt: z.string(),
+});
+export type Attachment = z.infer<typeof Attachment>;
+
+/**
+ * Limites por arquivo. As fotos são reduzidas no navegador antes de subir (o modelo não aproveita mais que
+ * uns 1.600 px e cada pixel a mais gasta cota); o servidor só confere. 5 MB por imagem é o teto do modelo.
+ */
+export const ATTACHMENT_LIMITS = {
+  perMessage: 5,
+  imageBytes: 5 * 1024 * 1024,
+  pdfBytes: 10 * 1024 * 1024,
+  textBytes: 512 * 1024,
+} as const;
+
+export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
+const TEXT_EXTENSIONS = new Set([
+  'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'jsonl', 'yaml', 'yml', 'xml', 'html', 'htm', 'css', 'js', 'mjs', 'ts', 'tsx', 'jsx',
+  'py', 'rb', 'go', 'rs', 'java', 'kt', 'c', 'h', 'cpp', 'cs', 'php', 'sh', 'ps1', 'bat', 'sql', 'log', 'ini', 'toml', 'srt', 'vtt',
+]);
+const EXT_IMAGE: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp' };
+
+/** Que tipo de anexo é, pelo tipo que o navegador informou ou pela extensão. Nulo = o Renfield não lê. */
+export function attachmentKind(name: string, mime: string): AttachmentKind | null {
+  const type = mime.split(';')[0]!.trim().toLowerCase();
+  const ext = name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? '';
+  if ((IMAGE_TYPES as readonly string[]).includes(type) || (!type.startsWith('image/') && EXT_IMAGE[ext])) return 'image';
+  if (type === 'application/pdf' || ext === 'pdf') return 'pdf';
+  if (type.startsWith('text/') || /^application\/(json|xml|x-yaml|yaml|x-sh|javascript)$/.test(type) || TEXT_EXTENSIONS.has(ext)) return 'text';
+  return null;
+}
+
 export const ChatMessage = z.object({
   id: z.string(),
   conversationId: z.string(),
@@ -25,27 +67,30 @@ export const ChatMessage = z.object({
   style: ChatStyle.nullable(),
   taskId: z.string().nullable(),
   deviceId: z.string().nullable(),
+  attachments: z.array(Attachment),
   createdAt: z.string(),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 
 export const SendMessageInput = z.object({
-  text: z.string().trim().min(1).max(20_000),
+  text: z.string().trim().max(20_000).default(''),
   style: ChatStyle.default('normal'),
-});
+  /** Ids devolvidos por POST /attachments. Cada anexo vai numa mensagem só. */
+  attachmentIds: z.array(z.string()).max(ATTACHMENT_LIMITS.perMessage).default([]),
+}).refine((m) => m.text.length > 0 || m.attachmentIds.length > 0, { message: 'Escreva uma mensagem ou anexe um arquivo.' });
 export type SendMessageInput = z.infer<typeof SendMessageInput>;
 
 export const SendMessageResult = z.object({
   conversationId: z.string(),
   message: ChatMessage,
-  /** Resposta do Marvin. Só vem quando a chamada usa ?wait=true. */
+  /** Resposta do Renfield. Só vem quando a chamada usa ?wait=true. */
   reply: ChatMessage.nullable(),
 });
 export type SendMessageResult = z.infer<typeof SendMessageResult>;
 
 /* ---------- memória, regras e modos ---------- */
 export const MemoryKind = z.enum(['fact', 'preference']);
-export const Source = z.enum(['user', 'marvin', 'feedback']);
+export const Source = z.enum(['user', 'renfield', 'feedback']);
 
 export const Memory = z.object({
   id: z.string(),

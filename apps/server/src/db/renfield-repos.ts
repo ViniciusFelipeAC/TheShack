@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { ChatMessage, ChatStyle, Conversation, Memory, MessageKind, Mode, Rule } from '@shack/shared';
-import { type Db, now, str } from './database.ts';
+import type { Attachment, ChatMessage, ChatStyle, Conversation, Memory, MessageKind, Mode, Rule } from '@shack/shared';
+import { type Db, now, str, tx } from './database.ts';
 
 type Row = Record<string, unknown>;
 const s = (v: unknown): string => String(v);
@@ -10,8 +10,20 @@ const b = (v: unknown): boolean => Number(v) === 1;
 const toConversation = (r: Row): Conversation => ({ id: s(r.id), agentId: s(r.agent_id), title: s(r.title), createdAt: s(r.created_at), updatedAt: s(r.updated_at) });
 const toMessage = (r: Row): ChatMessage => ({
   id: s(r.id), conversationId: s(r.conversation_id), role: r.role as ChatMessage['role'], kind: r.kind as MessageKind,
-  text: s(r.text), style: str(r.style) as ChatStyle | null, taskId: str(r.task_id), deviceId: str(r.device_id), createdAt: s(r.created_at),
+  text: s(r.text), style: str(r.style) as ChatStyle | null, taskId: str(r.task_id), deviceId: str(r.device_id), attachments: [], createdAt: s(r.created_at),
 });
+export const toAttachment = (r: Row): Attachment => ({
+  id: s(r.id), name: s(r.name), mime: s(r.mime), kind: r.kind as Attachment['kind'], size: Number(r.size), createdAt: s(r.created_at),
+});
+
+/** Preenche os anexos de cada mensagem com uma consulta só. */
+function withAttachments(db: Db, msgs: ChatMessage[]): ChatMessage[] {
+  if (!msgs.length) return msgs;
+  const rows = db.prepare(`SELECT * FROM attachments WHERE message_id IN (${msgs.map(() => '?').join(', ')}) ORDER BY rowid`).all(...msgs.map((m) => m.id));
+  const byMessage = new Map<string, Attachment[]>();
+  for (const r of rows) byMessage.set(s(r.message_id), [...(byMessage.get(s(r.message_id)) ?? []), toAttachment(r)]);
+  return msgs.map((m) => ({ ...m, attachments: byMessage.get(m.id) ?? [] }));
+}
 
 export function chatRepo(db: Db) {
   const get = (id: string): Conversation | null => {
@@ -34,19 +46,23 @@ export function chatRepo(db: Db) {
     setSessionId(id: string, sessionId: string | null): void {
       db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(sessionId, id);
     },
-    addMessage(m: Omit<ChatMessage, 'id' | 'createdAt'>): ChatMessage {
-      const msg: ChatMessage = { ...m, id: randomUUID(), createdAt: now() };
-      db.prepare(`INSERT INTO messages (id, conversation_id, role, kind, text, style, task_id, device_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(msg.id, msg.conversationId, msg.role, msg.kind, msg.text, msg.style, msg.taskId, msg.deviceId, msg.createdAt);
-      db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').run(msg.createdAt, msg.conversationId);
-      return msg;
+    /** Grava a mensagem e prende a ela os anexos ainda soltos, na mesma transação. */
+    addMessage(m: Omit<ChatMessage, 'id' | 'createdAt' | 'attachments'>, attachmentIds: string[] = []): ChatMessage {
+      const msg: ChatMessage = { ...m, id: randomUUID(), attachments: [], createdAt: now() };
+      tx(db, () => {
+        db.prepare(`INSERT INTO messages (id, conversation_id, role, kind, text, style, task_id, device_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(msg.id, msg.conversationId, msg.role, msg.kind, msg.text, msg.style, msg.taskId, msg.deviceId, msg.createdAt);
+        for (const id of attachmentIds) db.prepare('UPDATE attachments SET message_id = ? WHERE id = ? AND message_id IS NULL').run(msg.id, id);
+        db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').run(msg.createdAt, msg.conversationId);
+      });
+      return attachmentIds.length ? withAttachments(db, [msg])[0]! : msg;
     },
     /** As `limit` mensagens mais recentes antes de `before`, em ordem cronológica. */
     messages(conversationId: string, limit: number, before?: string): ChatMessage[] {
       const rows = before
         ? db.prepare('SELECT * FROM messages WHERE conversation_id = ? AND created_at < ? ORDER BY created_at DESC, rowid DESC LIMIT ?').all(conversationId, before, limit)
         : db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?').all(conversationId, limit);
-      return rows.map(toMessage).reverse();
+      return withAttachments(db, rows.map(toMessage).reverse());
     },
   };
 }

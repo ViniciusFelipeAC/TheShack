@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ATTACHMENT_LIMITS } from './renfield.ts';
 import type { ShackEvent } from './schemas.ts';
 
 /** Mensagens que o cliente manda pelo WebSocket. A primeira tem que ser `auth`. */
@@ -8,8 +9,10 @@ export const ClientMessage = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('chat.send'),
     conversationId: z.string().default('main'),
-    text: z.string().min(1).max(20_000),
+    text: z.string().max(20_000).default(''),
     style: z.enum(['normal', 'short', 'voice']).optional(),
+    /** Anexos já enviados por POST /attachments. Texto vazio vale quando há anexo. */
+    attachmentIds: z.array(z.string()).max(ATTACHMENT_LIMITS.perMessage).optional(),
     clientId: z.string(),
   }),
   z.object({

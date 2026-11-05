@@ -5,21 +5,21 @@ import { test } from 'node:test';
 import { serve } from '@hono/node-server';
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import { WebSocketServer } from 'ws';
-import { Account } from '../src/marvin/account.ts';
-import { marvinTools } from '../src/marvin/tools.ts';
+import { Account } from '../src/renfield/account.ts';
+import { renfieldTools } from '../src/renfield/tools.ts';
 import { setup, waitFor } from './helpers.ts';
 
 type S = ReturnType<typeof setup>;
 const say = (s: S, text: string, style = 'normal') => s.call('POST', '/conversations/main/messages?wait=true', { text, style });
 const messages = async (s: S) => (await s.call('GET', '/conversations/main/messages?limit=100')).body as Array<{ role: string; kind: string; text: string; taskId: string | null }>;
-const toolsOf = (s: S) => marvinTools({ tasks: s.shack.tasks, registry: s.shack.registry, mind: s.shack.mind, workspaces: s.shack.workspaces });
+const toolsOf = (s: S) => renfieldTools({ tasks: s.shack.tasks, registry: s.shack.registry, mind: s.shack.mind, workspaces: s.shack.workspaces });
 const run = (s: S, name: string, args: Record<string, unknown>) => toolsOf(s).find((t) => t.name === name)!.run(args, { conversationId: 'main' });
 
-test('chat: manda, o Marvin responde, e tudo fica no histórico', async (t) => {
+test('chat: manda, o Renfield responde, e tudo fica no histórico', async (t) => {
   const s = setup(); t.after(s.cleanup);
-  const r = await say(s, 'Boa tarde, Marvin');
+  const r = await say(s, 'Boa tarde, Renfield');
   assert.equal(r.status, 200);
-  assert.equal(r.body.reply.text, 'Pois não. Você disse: Boa tarde, Marvin');
+  assert.equal(r.body.reply.text, 'Pois não. Você disse: Boa tarde, Renfield');
   const history = await messages(s);
   assert.deepEqual(history.map((m) => m.role), ['user', 'assistant']);
 
@@ -42,7 +42,7 @@ test('sem ?wait a resposta chega depois, e o estilo vai no contexto', async (t) 
 
 test('editar a persona muda o prompt da próxima mensagem', async (t) => {
   const s = setup(); t.after(s.cleanup);
-  await s.call('PUT', '/agents/marvin/persona', { content: 'Você fala como um mordomo vitoriano.' });
+  await s.call('PUT', '/agents/renfield/persona', { content: 'Você fala como um mordomo vitoriano.' });
   await say(s, 'Olá');
   assert.match(s.engine.last.systemPrompt, /mordomo vitoriano/);
 });
@@ -84,7 +84,7 @@ test('modo foco aparece no contexto', async (t) => {
   assert.equal((await s.call('PUT', '/settings/mode', { name: 'inexistente' })).status, 404);
 });
 
-test('delegar: o Marvin cria a tarefa e avisa quando ela termina', async (t) => {
+test('delegar: o Renfield cria a tarefa e avisa quando ela termina', async (t) => {
   const s = setup(); t.after(s.cleanup);
   s.engine.handler = async () => {
     await run(s, 'tasks_create', { assignee: 'etnad', workspaceId: s.ws.id, title: 'Testes dos lembretes', prompt: 'Adicionar testes' });
@@ -94,7 +94,7 @@ test('delegar: o Marvin cria a tarefa e avisa quando ela termina', async (t) => 
   const notice = await waitFor(async () => (await messages(s)).find((m) => m.kind === 'task_notice'), 'aviso de conclusão');
   assert.match(notice.text, /O etnaD concluiu "Testes dos lembretes"/);
   const task = (await s.call('GET', `/tasks/${notice.taskId}`)).body;
-  assert.deepEqual(task.origin, { kind: 'agent', agentId: 'marvin', conversationId: 'main' });
+  assert.deepEqual(task.origin, { kind: 'agent', agentId: 'renfield', conversationId: 'main' });
 });
 
 test('"sim" no chat aprova o pedido pendente do etnaD', async (t) => {
@@ -104,19 +104,19 @@ test('"sim" no chat aprova o pedido pendente do etnaD', async (t) => {
   const r = await say(s, 'Sim, pode');
   assert.match(r.body.reply.text, /Autorizei o pedido do etnaD/);
   await waitFor(async () => (await s.call('GET', `/tasks/${task.id}`)).body.status === 'done', 'tarefa terminar');
-  assert.equal(s.engine.turns.length, 0, 'responder "sim" não gasta uma vez do Marvin');
+  assert.equal(s.engine.turns.length, 0, 'responder "sim" não gasta uma vez do Renfield');
 });
 
-test('enquanto responde, o Marvin aparece trabalhando', async (t) => {
+test('enquanto responde, o Renfield aparece trabalhando', async (t) => {
   const s = setup(); t.after(s.cleanup);
   let release: (() => void) | null = null;
   s.engine.handler = () => new Promise<string>((r) => { release = () => r('Pronto.'); });
   await s.call('POST', '/conversations/main/messages', { text: 'Pensa com calma' });
-  await waitFor(async () => (await s.call('GET', '/agents/marvin')).body.status === 'working', 'Marvin trabalhando');
-  assert.equal((await s.call('GET', '/agents/marvin')).body.activity, 'Respondendo você');
+  await waitFor(async () => (await s.call('GET', '/agents/renfield')).body.status === 'working', 'Renfield trabalhando');
+  assert.equal((await s.call('GET', '/agents/renfield')).body.activity, 'Respondendo você');
   const finish = await waitFor(() => release, 'motor começar a responder');
   finish();
-  await waitFor(async () => (await s.call('GET', '/agents/marvin')).body.status === 'idle', 'Marvin ocioso');
+  await waitFor(async () => (await s.call('GET', '/agents/renfield')).body.status === 'idle', 'Renfield ocioso');
 });
 
 test('uma resposta por vez em cada conversa', async (t) => {
@@ -166,7 +166,7 @@ test('conta: aceita assinatura, recusa chave de API e escolhe o modelo do plano'
   assert.equal(ok.status.subscriptionOk, true);
   assert.doesNotThrow(() => ok.assertSubscription());
   assert.equal(ok.pickModel('etnad', ['opus', 'sonnet'], 'sonnet'), 'sonnet');
-  assert.equal(ok.pickModel('marvin', ['sonnet', 'haiku'], 'sonnet'), 'sonnet');
+  assert.equal(ok.pickModel('renfield', ['sonnet', 'haiku'], 'sonnet'), 'sonnet');
 
   const paid = new Account(s.shack.bus);
   await paid.inspect(fakeQuery({ apiKeySource: 'ANTHROPIC_API_KEY' }));

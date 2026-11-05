@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Schemas tolerantes para as ferramentas do Marvin. O modelo erra parâmetros com frequência, e cada
+ * Schemas tolerantes para as ferramentas do Renfield. O modelo erra parâmetros com frequência, e cada
  * rejeição custa uma ida e volta na cota. Aqui o valor é ajustado (limitado, aparado, convertido) e
  * só é rejeitado quando não tem conserto. O JSON Schema que o modelo vê continua o tipo certo.
  */

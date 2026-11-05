@@ -7,7 +7,7 @@ import { type Config, ROOT } from '../src/config.ts';
 import { createShack } from '../src/shack.ts';
 import { FakeEngine } from './fake-engine.ts';
 
-/** Shack isolada: banco em memória (ou arquivo temporário), cópia da pasta agents/ e Marvin falso. */
+/** Shack isolada: banco em memória (ou arquivo temporário), cópia da pasta agents/ e Renfield falso. */
 export function setup(opts: { stepMs?: number; dbFile?: boolean; productionRunners?: boolean } = {}) {
   const engine = new FakeEngine();
   const dir = mkdtempSync(join(tmpdir(), 'shack-test-'));
@@ -17,7 +17,7 @@ export function setup(opts: { stepMs?: number; dbFile?: boolean; productionRunne
     host: '127.0.0.1', port: 0, timezone: 'America/Sao_Paulo',
     dbPath: opts.dbFile ? join(dir, 'shack.db') : ':memory:', agentsDir,
     fallbackModel: 'sonnet', runner: opts.productionRunners ? 'sdk' : 'simulated', eventRetentionDays: 30,
-    webDir: join(dir, 'web'),
+    webDir: join(dir, 'web'), uploadsDir: join(dir, 'uploads'),
   };
   // Relógio controlado pelo teste (lembretes, alarmes e timers) e push falso.
   let current: Date | null = null;

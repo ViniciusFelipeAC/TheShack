@@ -8,14 +8,14 @@ const agents = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `a${i}`
 const reachable = (blocked: boolean[][], from: { x: number; y: number }, to: { x: number; y: number }) => findPath(blocked, from.x, from.y, to.x, to.y) !== null;
 
 test('dois agentes cabem no cômodo principal, nas mesas do protótipo', () => {
-  const L = planHouse([{ id: 'marvin', kind: 'single' }, { id: 'etnad', kind: 'dual' }]);
+  const L = planHouse([{ id: 'renfield', kind: 'single' }, { id: 'etnad', kind: 'dual' }]);
   assert.equal(L.wings, 0);
   assert.equal(L.w, BASE_W);
-  assert.equal(L.desks.marvin.cx, 56);
+  assert.equal(L.desks.renfield.cx, 56);
   assert.equal(L.desks.etnad.cx, 168);
   assert.equal(L.desks.etnad.screens.length, 2);
-  assert.equal(L.desks.marvin.screens.length, 1);
-  for (const id of ['marvin', 'etnad']) {
+  assert.equal(L.desks.renfield.screens.length, 1);
+  for (const id of ['renfield', 'etnad']) {
     const d = L.desks[id];
     assert.ok(L.blocked[d.seatTile.y][d.seatTile.x], 'a cadeira bloqueia a passagem');
     assert.ok(reachable(L.blocked, DOOR, d.seatTile), `${id} chega na mesa a partir da porta`);
@@ -77,10 +77,10 @@ test('agentes de chat ficam com as primeiras mesas, o resto segue a ordem do ser
 });
 
 test('a aparência vem do manifesto; o que faltar sai do id, sempre igual', () => {
-  const marvin = lookOf('marvin', { palette: { skin: '#e3b896', outfit: '#22252d', sleeve: 'branco' }, accessory: 'bowtie', hair: 'neat' });
-  assert.equal(marvin.skin, '#e3b896');
-  assert.equal(marvin.accessory, 'bowtie');
-  assert.equal(marvin.sleeve, '#d9d6cf', 'cor inválida é ignorada');
+  const renfield = lookOf('renfield', { palette: { skin: '#e3b896', outfit: '#22252d', sleeve: 'branco' }, accessory: 'bowtie', hair: 'neat' });
+  assert.equal(renfield.skin, '#e3b896');
+  assert.equal(renfield.accessory, 'bowtie');
+  assert.equal(renfield.sleeve, '#d9d6cf', 'cor inválida é ignorada');
   assert.deepEqual(lookOf('novo', {}), lookOf('novo', {}));
   assert.notDeepEqual(lookOf('novo', {}), lookOf('outro', {}));
   assert.equal(lookOf('x', { accessory: 'chapéu' }).accessory, 'none');

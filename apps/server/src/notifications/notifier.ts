@@ -3,7 +3,7 @@ import type { ShackNotification } from '@shack/shared';
 import type { EventBus } from '../core/events.ts';
 import { type Db, now } from '../db/database.ts';
 import { notFound } from '../errors.ts';
-import type { Mind } from '../marvin/mind.ts';
+import type { Mind } from '../renfield/mind.ts';
 import type { WebPush } from './push.ts';
 
 type Priority = ShackNotification['priority'];

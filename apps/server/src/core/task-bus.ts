@@ -57,7 +57,7 @@ export type TaskBusOptions = {
   bus: EventBus;
   approvals: Approvals;
   registry: Registry;
-  /** Nulo quando o agente não executa tarefas (por exemplo, o Marvin, que só conversa). */
+  /** Nulo quando o agente não executa tarefas (por exemplo, o Renfield, que só conversa). */
   runnerFor: (agent: AgentDef) => AgentRunner | null;
   workspaceExists?: (id: string) => boolean;
   progressThrottleMs?: number;
@@ -179,7 +179,7 @@ export class TaskBus {
     for (const live of this.#live.values()) { live.controller.abort(new Error(SHUTDOWN_REASON)); if (live.timer) clearTimeout(live.timer); }
   }
 
-  /** Atividade fora de tarefas, como o Marvin respondendo no chat. Nulo encerra. */
+  /** Atividade fora de tarefas, como o Renfield respondendo no chat. Nulo encerra. */
   setChatActivity(agentId: string, text: string | null): void {
     if (this.#closed) return;
     if (text) this.#chatActivity.set(agentId, text); else this.#chatActivity.delete(agentId);

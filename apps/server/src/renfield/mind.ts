@@ -1,5 +1,5 @@
 import type { Memory, Mode, Rule } from '@shack/shared';
-import type { MindRepo } from '../db/marvin-repos.ts';
+import type { MindRepo } from '../db/renfield-repos.ts';
 import { notFound } from '../errors.ts';
 
 type Source = Memory['source'];
@@ -8,7 +8,7 @@ const STOP = new Set(['que', 'para', 'com', 'uma', 'umas', 'uns', 'dos', 'das', 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const words = (s: string) => fold(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOP.has(w));
 
-/** Memórias, regras aprendidas e modos do Marvin. Tudo editável por você e por ele. */
+/** Memórias, regras aprendidas e modos do Renfield. Tudo editável por você e por ele. */
 export class Mind {
   #repo: MindRepo;
   #modeListeners = new Set<(prev: Mode | null, next: Mode | null) => void>();

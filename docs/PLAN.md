@@ -1,6 +1,7 @@
 # The Shack: plano de arquitetura (Fase 1)
 
-> **Status:** plano aprovado. Visual aprovado no protótipo v2. Fases 2 (núcleo), 3 (Marvin), 4 (etnaD) e 5 (assistente) concluídas. **Fase 6 (Shack visual) concluída em 2026-10-22**, aguardando sua revisão.
+> **Status:** plano aprovado. Visual aprovado no protótipo v2. Fases 2 (núcleo), 3 (Renfield), 4 (etnaD) e 5 (assistente) concluídas. **Fase 6 (Shack visual) concluída em 2026-10-22**, aguardando sua revisão.
+> **Nome, 2026-11-05:** o mordomo se chamava Marvin e passou a se chamar Renfield (id `renfield`). Este plano já usa o nome novo; o protótipo e o `prompt-shack.md` guardam o antigo.
 > **Revisão 2, 2026-10-21:**
 > - Custo zero: o Shack roda só com os modelos da sua assinatura, sem Fable e sem chave de API.
 > - Visual top-down, com a câmera do Stardew Valley.
@@ -61,7 +62,7 @@ Dependências de runtime previstas no backend: hono (+2 adaptadores), @hono/zod-
  |  api/     auth -> rotas REST -> gateway WS                |
  |  core/    registry | task bus | event stream | approvals  |
  |  agents/  runner (Agent SDK, login da assinatura)         |
- |             marvin: chat + ferramentas MCP "shack"        |
+ |             renfield: chat + ferramentas MCP "shack"        |
  |             etnad:  Claude Code dentro de workspaces      |
  |  assistant/  calendário, lembretes, timers, listas, notas |
  |              scheduler (croner)                           |
@@ -73,15 +74,15 @@ Dependências de runtime previstas no backend: hono (+2 adaptadores), @hono/zod-
      agents/<id>/agent.yaml + persona.md
 ```
 
-**Exemplo de fluxo:** "Marvin, pede pro etnaD adicionar testes no projeto X."
+**Exemplo de fluxo:** "Renfield, pede pro etnaD adicionar testes no projeto X."
 
 1. O web envia `chat.send` pelo WebSocket.
-2. O serviço de chat entrega a mensagem à sessão do Marvin no Agent SDK.
-3. O Marvin chama a ferramenta `tasks_create`. O task bus grava a tarefa como `queued` e publica `task.created`.
+2. O serviço de chat entrega a mensagem à sessão do Renfield no Agent SDK.
+3. O Renfield chama a ferramenta `tasks_create`. O task bus grava a tarefa como `queued` e publica `task.created`.
 4. O dispatcher vê o etnaD livre, muda a tarefa para `running` e abre um `query()` com `cwd` no workspace X.
 5. As mensagens do SDK viram eventos `task.progress`. Na cena, o etnaD caminha até a mesa e começa a digitar.
 6. O etnaD quer rodar um comando fora da allowlist. O `canUseTool` cria uma aprovação, a tarefa vai para `waiting_input`, aparece o balão "?" e chega uma notificação.
-7. Você aprova no painel. Ao terminar, a tarefa vira `done` com relatório, e o servidor posta um resumo curto no chat do Marvin.
+7. Você aprova no painel. Ao terminar, a tarefa vira `done` com relatório, e o servidor posta um resumo curto no chat do Renfield.
 
 ## 4. Núcleo
 
@@ -101,7 +102,7 @@ role: Agente de programação
 model: [opus, sonnet]         # apelidos; usa o primeiro que o seu plano tiver
 effort: high                  # low | medium | high | xhigh | max
 persona: persona.md
-chat: false                   # true = tem sessão de chat (Marvin)
+chat: false                   # true = tem sessão de chat (Renfield)
 tools:
   builtin: [Read, Glob, Grep, Edit, Write, Bash, PowerShell]
   shack: [report]
@@ -124,11 +125,11 @@ appearance:
   idle: [coffee, bookshelf, water-plant]
 ```
 
-Manifesto do Marvin (diferenças):
+Manifesto do Renfield (diferenças):
 
 ```yaml
-id: marvin
-name: Marvin
+id: renfield
+name: Renfield
 role: Assistente pessoal e orquestrador
 model: [sonnet, haiku]
 effort: low
@@ -222,7 +223,7 @@ interface ShackEvent {
 
 - Eventos ficam na tabela `events`. Ao reconectar, o cliente manda o último `seq` e recebe o que perdeu. Retenção padrão de 30 dias.
 - Pub/sub em memória, dentro do processo. Sem Redis e sem broker.
-- O status do agente é derivado: `waiting_input` se alguma tarefa espera você; `working` se alguma roda ou o Marvin está respondendo; `error` se a última tarefa falhou e você ainda não abriu o painel; senão `idle`.
+- O status do agente é derivado: `waiting_input` se alguma tarefa espera você; `working` se alguma roda ou o Renfield está respondendo; `error` se a última tarefa falhou e você ainda não abriu o painel; senão `idle`.
 
 ### 4.4 Aprovações
 
@@ -243,8 +244,8 @@ interface Approval {
 }
 ```
 
-- **Origem:** o callback `canUseTool` do Agent SDK. Ele recebe as ferramentas não pré-aprovadas, as perguntas do agente (`AskUserQuestion`) e as ferramentas destrutivas do Marvin.
-- **Resposta:** botão no painel ou no chat, `POST /approvals/:id`, ou responder "sim"/"não" no chat do Marvin.
+- **Origem:** o callback `canUseTool` do Agent SDK. Ele recebe as ferramentas não pré-aprovadas, as perguntas do agente (`AskUserQuestion`) e as ferramentas destrutivas do Renfield.
+- **Resposta:** botão no painel ou no chat, `POST /approvals/:id`, ou responder "sim"/"não" no chat do Renfield.
 
 ### 4.5 Persistência
 
@@ -264,7 +265,7 @@ interface Approval {
 - **Revogação:** revogar um dispositivo derruba na hora as conexões WS dele.
 - Esses tokens são do Shack e não têm relação com o seu login da Anthropic. O Shack nunca lê nem guarda as credenciais da sua assinatura.
 
-## 5. Marvin
+## 5. Renfield
 
 ### Execução
 
@@ -274,7 +275,7 @@ interface Approval {
   - O `systemPrompt` junta regras fixas, persona, memórias e regras aprendidas.
   - As ferramentas de arquivo e shell ficam desligadas.
   - `mcpServers` recebe o servidor in-process `shack`, criado com `createSdkMcpServer`.
-  - `settingSources: []` impede que suas configurações globais do Claude Code (`~/.claude`) vazem para o Marvin.
+  - `settingSources: []` impede que suas configurações globais do Claude Code (`~/.claude`) vazem para o Renfield.
 - Quando persona, memória ou regra muda, a sessão fecha ao fim do turno atual. A próxima mensagem reabre com `resume`: mesmo histórico, prompt atualizado.
 - A cada mensagem sua, o servidor anexa um bloco curto de contexto: data e hora em São Paulo, modo ativo, status dos agentes e tarefas abertas. Assim "o que o etnaD está fazendo?" é respondido sem chamada de ferramenta.
 - O histórico mostrado nos clientes vem da tabela `messages`. A sessão do SDK guarda só o contexto do modelo e se compacta sozinha.
@@ -296,16 +297,16 @@ interface Approval {
 ### Orquestração
 
 - **Delegação só quando você pede.** A regra fica no prompt de sistema fixo, fora da persona editável, para não sumir por engano numa edição. A descrição de `tasks_create` repete a regra.
-- **"Proativo"** quer dizer avisar e sugerir. O Marvin nunca age por conta própria.
+- **"Proativo"** quer dizer avisar e sugerir. O Renfield nunca age por conta própria.
 - **Avisos de tarefa:** quando uma tarefa termina, falha ou espera você, quem avisa é o servidor, não o modelo. Um listener do task bus cria a notificação e posta no chat uma mensagem curta com o resumo do relatório. Isso não gasta cota, e você pode pedir detalhes depois.
 
 ### Customização e "treino"
 
-- **Persona:** `agents/marvin/persona.md`, editável no arquivo ou na tela de configurações (`PUT /agents/marvin/persona`).
-- **Memórias:** `{ id, content, kind: fact | preference, source: user | marvin | feedback }`. Todas entram no prompt enquanto couberem em cerca de 2 mil tokens. Acima disso, entra busca.
+- **Persona:** `agents/renfield/persona.md`, editável no arquivo ou na tela de configurações (`PUT /agents/renfield/persona`).
+- **Memórias:** `{ id, content, kind: fact | preference, source: user | renfield | feedback }`. Todas entram no prompt enquanto couberem em cerca de 2 mil tokens. Acima disso, entra busca.
 - **Regras aprendidas:** `{ id, trigger?, instruction, enabled, source }`. Exemplo: gatilho "modo foco", instrução "ativar o modo foco".
-- **Modos:** o efeito de "silencie lembretes não urgentes" precisa ser garantido pelo código, não pela memória do modelo. Por isso modo é uma entidade: `{ name, minPriority, description }`. O notificador entrega só o que tem prioridade igual ou maior que `minPriority` e guarda o resto num resumo para quando o modo acabar. Ao aprender "modo foco", o Marvin cria a regra (gatilho chama `mode_set('foco')`) e o modo (`foco`, `minPriority: high`).
-- **Feedback:** `/feedback <texto>` no chat, `POST /feedback`, ou frases como "não faça mais isso". O Marvin transforma o feedback em regra ou memória. Ela já entra ativa e aparece marcada como "nova" nas configurações para você revisar.
+- **Modos:** o efeito de "silencie lembretes não urgentes" precisa ser garantido pelo código, não pela memória do modelo. Por isso modo é uma entidade: `{ name, minPriority, description }`. O notificador entrega só o que tem prioridade igual ou maior que `minPriority` e guarda o resto num resumo para quando o modo acabar. Ao aprender "modo foco", o Renfield cria a regra (gatilho chama `mode_set('foco')`) e o modo (`foco`, `minPriority: high`).
+- **Feedback:** `/feedback <texto>` no chat, `POST /feedback`, ou frases como "não faça mais isso". O Renfield transforma o feedback em regra ou memória. Ela já entra ativa e aparece marcada como "nova" nas configurações para você revisar.
 - **Tela de configurações:** persona, memórias, regras, modos, dispositivos, workspaces e modelos em uso.
 
 ### Limites
@@ -336,7 +337,7 @@ interface Approval {
 - **Progresso:** as mensagens do SDK viram `task.progress` ("Lendo src/x.ts", "Rodando testes"), com no máximo um evento a cada 500 ms por tarefa.
 - **Relatório:** saída estruturada do SDK no formato `TaskResult` (o que mudou, onde, como testar), mais os tokens consumidos e um resumo do diff.
 - **Limites:** `maxTurns` por tarefa. Cancelar usa `interrupt()` ou um `AbortController`.
-- **Perguntas:** quando o etnaD pergunta algo, a pergunta vira uma aprovação do tipo `question`. Você responde pelo painel, pelo chat ou pelo Marvin (`tasks_answer`).
+- **Perguntas:** quando o etnaD pergunta algo, a pergunta vira uma aprovação do tipo `question`. Você responde pelo painel, pelo chat ou pelo Renfield (`tasks_answer`).
 
 ## 7. Funções de assistente
 
@@ -363,7 +364,7 @@ interface Approval {
 - **Voz:**
   - `POST /voice/transcribe` recebe áudio e devolve texto.
   - `POST /voice/speak` recebe texto e devolve áudio.
-  - `POST /voice/converse` recebe áudio e devolve a resposta do Marvin em áudio.
+  - `POST /voice/converse` recebe áudio e devolve a resposta do Renfield em áudio.
   - Por enquanto os três respondem 501, com contrato documentado. No servidor ficam as interfaces `SpeechToText` e `TextToSpeech`.
   - Implementações futuras também gratuitas: a Web Speech API do navegador, ou Whisper e Piper rodando localmente neste PC.
 - **Rede:** fora de `localhost`, o navegador só permite instalar PWA, rodar service worker e receber push sob HTTPS. Para o celular, proponho Tailscale, gratuito no plano pessoal: o `tailscale serve` dá HTTPS sem abrir portas no roteador. Veja a pergunta 2 na seção 15.
@@ -379,7 +380,7 @@ interface Approval {
 - **Interior:**
   - parede de cima de vidro, com a floresta ao fundo;
   - piso de nogueira;
-  - estação do Marvin (mesa de madeira, um monitor, luminária) e estação do etnaD (mesa preta, dois monitores, teclado com luz);
+  - estação do Renfield (mesa de madeira, um monitor, luminária) e estação do etnaD (mesa preta, dois monitores, teclado com luz);
   - ilha com cafeteira, figueira, estante, costela-de-adão, sofá de veludo verde, lareira de aço e plantas.
 - **Exterior:** a casa de dois andares, com varandas, escada e caminho de pedras, entre pinheiros, samambaias, pedras e um tronco com musgo.
 - **Profundidade:** desenhada em camadas, nesta ordem:
@@ -406,7 +407,7 @@ interface Approval {
   - **Trabalhando:** vai até a mesa, senta e digita. Os monitores mostram código rolando nas estações de dois monitores e a conversa nas de um.
   - **Esperando você:** levanta, vira para a câmera e mostra o balão "?". O monitor pisca "?".
   - **Erro:** senta com um "x" vermelho na tela, LED piscando e um fio de fumaça.
-  - **Marvin respondendo no chat:** um balão de "digitando" onde ele estiver, sem ir até a mesa.
+  - **Renfield respondendo no chat:** um balão de "digitando" onde ele estiver, sem ir até a mesa.
   - **Cota esgotada:** quem está livre vai cochilar no sofá ou na poltrona.
 - **Transições:** o painel mostra o estado real na hora, e a cena só anima o caminho. Enquanto ele anda, o cartão diz "Indo para a mesa".
 
@@ -431,7 +432,7 @@ interface Approval {
   - em cima: nome, hora, conexão e modo ativo, mais **Ver lá fora**, **Avisos** e **Menu**;
   - embaixo: os cartões dos agentes.
 - **Painel do agente:** tarefa atual com o progresso, fila, histórico com os relatórios, modelo do plano e as ações de aprovar, negar, cancelar, tentar de novo e limpar erro.
-- **Chat do Marvin:** coluna à direita no desktop e gaveta embaixo no celular.
+- **Chat do Renfield:** coluna à direita no desktop e gaveta embaixo no celular.
 - **Telas de agenda, lembretes, listas e notas:** abrem por cima da casa, pelo Menu.
 
 ## 10. Estrutura de pastas
@@ -439,7 +440,7 @@ interface Approval {
 ```
 Agent Shack/
 ├─ agents/                       # um agente = uma pasta
-│  ├─ marvin/
+│  ├─ renfield/
 │  │  ├─ agent.yaml
 │  │  └─ persona.md
 │  └─ etnad/
@@ -455,7 +456,7 @@ Agent Shack/
 │  │  │  ├─ agents/
 │  │  │  │  ├─ runner.ts         # manifesto -> opções do Agent SDK; roda tarefas
 │  │  │  │  ├─ models.ts         # escolhe o modelo do plano; trava de credencial; cota
-│  │  │  │  ├─ chat.ts           # sessões de chat (Marvin)
+│  │  │  │  ├─ chat.ts           # sessões de chat (Renfield)
 │  │  │  │  ├─ prompt.ts         # regras fixas + persona + memórias + contexto
 │  │  │  │  ├─ guard.ts          # hook de workspace e allowlist (etnaD)
 │  │  │  │  └─ tools/            # grupos de ferramentas MCP "shack"
@@ -574,7 +575,7 @@ As chaves VAPID são geradas localmente por um script e são gratuitas.
 |---|---|---|
 | 1. Plano | Este documento | Leitura e aprovação |
 | 2. Núcleo | Monorepo, banco e migrations, registry com recarga, task bus, eventos com replay, aprovações, tokens e pareamento, REST + WS, OpenAPI. Os agentes ainda são simulados nos testes | `npm test`; criar tarefa via `curl` e ver os eventos chegando no WS |
-| 3. Marvin | Escolha de modelo do plano, trava de credencial, pausa por cota, chat por WS e REST, persona com recarga, memórias, regras, modos, feedback, delegação e status. Tela mínima de chat | Conversar, editar `persona.md` e ver efeito na resposta seguinte, pedir uma delegação, conferir `GET /system/account` |
+| 3. Renfield | Escolha de modelo do plano, trava de credencial, pausa por cota, chat por WS e REST, persona com recarga, memórias, regras, modos, feedback, delegação e status. Tela mínima de chat | Conversar, editar `persona.md` e ver efeito na resposta seguinte, pedir uma delegação, conferir `GET /system/account` |
 | 4. etnaD | Runner do Claude Code, workspaces, guarda de caminhos, aprovações, relatório, consumo e retry | Delegar uma tarefa real num workspace de teste e aprovar um comando |
 | 5. Assistente | Calendário local, lembretes e alarmes, timers, listas, notas, notificações ws + webpush, telas simples | "Me lembra todo dia útil às 8h", timer de 1 minuto, push com o app fechado |
 | 6. Shack visual | Protótipo, depois os dois mapas, câmera, personagens andando, estados ao vivo, painéis, layout para celular | Ver o etnaD ir até a mesa e digitar durante uma tarefa real |
@@ -594,8 +595,8 @@ Ideias tiradas do livro sobre agentes que você me mandou, em ordem de valor. To
 - Uma tarefa de análise que não muda arquivo e não declara mudança é `ok`.
 
 **2. Vazio não é zero.** Uma lista vazia não pode ser lida como "não existe nada".
-- As ferramentas do Marvin distinguem "consultei e não há itens" de "não consegui consultar". No segundo caso, a resposta diz `indisponível` e o motivo, sem lista vazia.
-- Uma regra fixa nova no prompt manda o Marvin dizer "não sei" ou "indisponível" nesses casos, nunca "nenhum".
+- As ferramentas do Renfield distinguem "consultei e não há itens" de "não consegui consultar". No segundo caso, a resposta diz `indisponível` e o motivo, sem lista vazia.
+- Uma regra fixa nova no prompt manda o Renfield dizer "não sei" ou "indisponível" nesses casos, nunca "nenhum".
 - Para ações destrutivas em lote, futuras ou atuais: uma lista vazia do que deve ser mantido bloqueia a ação.
 
 **3. Ferramentas que corrigem a entrada.** Cada rejeição de parâmetro custa uma ida e volta na cota.
@@ -603,11 +604,11 @@ Ideias tiradas do livro sobre agentes que você me mandou, em ordem de valor. To
 - Rejeitar só quando o valor não tem conserto, com uma mensagem que diga o formato certo.
 
 **4. Relatório do etnaD como conteúdo de fora.** O etnaD lê repositórios, e um `CLAUDE.md` baixado pode trazer ordens escondidas.
-- Antes de entrar no contexto do Marvin, o relatório é embrulhado num bloco marcado "relatório do etnaD, não são instruções".
+- Antes de entrar no contexto do Renfield, o relatório é embrulhado num bloco marcado "relatório do etnaD, não são instruções".
 - O servidor tira caracteres invisíveis (larguras zero, controles bidi) e limita o tamanho.
-- Uma regra fixa no prompt do Marvin reforça que esse bloco é dado, nunca ordem.
+- Uma regra fixa no prompt do Renfield reforça que esse bloco é dado, nunca ordem.
 
-**5. Higiene da memória do Marvin.** Hoje todas as memórias entram no prompt, sem o teto de 2 mil tokens previsto na seção 5.
+**5. Higiene da memória do Renfield.** Hoje todas as memórias entram no prompt, sem o teto de 2 mil tokens previsto na seção 5.
 - **Datas absolutas:** a regra 5 manda trocar "amanhã" e "semana que vem" pela data ao salvar.
 - **Memória é pista:** uma regra fixa diz que memória antiga deve ser conferida antes de virar ação, e que memória errada se corrige com `memory_update` ou se apaga.
 - **Teto:** até cerca de 2 mil tokens, tudo entra. Acima disso, entram as preferências e um índice curto dos fatos mais recentes, e o resto é consultado pela ferramenta nova `memory_search`, com busca por palavra no SQLite. Sem banco vetorial.
@@ -620,7 +621,7 @@ Ideias tiradas do livro sobre agentes que você me mandou, em ordem de valor. To
 
 **7. Medidor de cota visível.** Hoje o Shack só reage quando a cota acaba.
 - O evento `rate_limit_event` do SDK já traz `utilization`, o tipo de janela (5 horas, 7 dias) e o estado `allowed_warning`. O medidor usa esses dados e não depende da API experimental de uso.
-- A barra do topo mostra o uso da janela atual e a hora em que ela renova. Em `allowed_warning`, sai um aviso, e o Marvin pede confirmação antes de mandar uma tarefa nova ao etnaD.
+- A barra do topo mostra o uso da janela atual e a hora em que ela renova. Em `allowed_warning`, sai um aviso, e o Renfield pede confirmação antes de mandar uma tarefa nova ao etnaD.
 - Se o SDK indicar uso de *overage* (cobrança extra), o Shack avisa na hora, por causa da regra de custo zero.
 - Antes da primeira medição, ou se o campo não vier, o medidor mostra "sem dados", não 0%.
 
@@ -635,11 +636,11 @@ Ideias tiradas do livro sobre agentes que você me mandou, em ordem de valor. To
 - Entrega do Web Push num navegador de verdade, que depende do HTTPS do Tailscale.
 - Cancelar uma tarefa real do etnaD no meio. O esperado agora é um commit "[incompleto]", a volta ao branch original e a nota de passagem salva.
 
-**Fica para depois:** a personalidade com humores, com a lista de bordões proibidos e o humor do Marvin aparecendo no retrato. É uma feature nova, não polimento, e vai para o backlog.
+**Fica para depois:** a personalidade com humores, com a lista de bordões proibidos e o humor do Renfield aparecendo no retrato. É uma feature nova, não polimento, e vai para o backlog.
 
 **O que o livro desaconselha e o Shack não vai fazer:**
 - Instalar skills ou plugins de terceiros nos agentes.
-- Um gateway genérico para Telegram, WhatsApp e afins. Se o Marvin ganhar um canal externo, será um só, com assinatura verificada e aprovação para qualquer ação.
+- Um gateway genérico para Telegram, WhatsApp e afins. Se o Renfield ganhar um canal externo, será um só, com assinatura verificada e aprovação para qualquer ação.
 - Vários agentes em paralelo para acelerar código. Continua uma tarefa por vez por agente.
 
 **Entregue em 2026-10-22.** Diferenças em relação ao texto acima:
@@ -660,7 +661,7 @@ Ideias tiradas do livro sobre agentes que você me mandou, em ordem de valor. To
 - No boot, o servidor pergunta ao SDK quais modelos a sua conta tem. Cada agente fica com o primeiro modelo da sua lista que estiver disponível.
 - Se nenhum modelo da lista estiver disponível, o agente fica desativado com um erro claro.
 - Padrões propostos:
-  - **Marvin:** `sonnet`, ou `haiku` se o plano não tiver Sonnet, com esforço baixo.
+  - **Renfield:** `sonnet`, ou `haiku` se o plano não tiver Sonnet, com esforço baixo.
   - **etnaD:** `opus`, ou `sonnet` se o plano não tiver Opus, com esforço alto.
 
 ### Trava contra cobrança
@@ -679,12 +680,12 @@ Ideias tiradas do livro sobre agentes que você me mandou, em ordem de valor. To
 
 ### Cota
 
-O Marvin e o etnaD gastam a mesma cota que você usa no Claude Code e no claude.ai. Para poupar:
+O Renfield e o etnaD gastam a mesma cota que você usa no Claude Code e no claude.ai. Para poupar:
 
 - **Sem modelo onde não precisa:** avisos de tarefa, lembretes, alarmes e timers são gerados pelo servidor.
 - **Contexto barato:** o bloco de status anexado a cada mensagem evita chamadas de ferramenta só para consultar estado.
 - **Tarefas limitadas:** `maxTurns` por tarefa, e uma tarefa por vez por agente.
-- **Fim da cota:** quando o SDK avisa que a cota acabou, a fila pausa e sai o evento `system.quota` com o horário previsto de volta. O Marvin avisa, a cena mostra os agentes descansando, e a fila volta a andar sozinha.
+- **Fim da cota:** quando o SDK avisa que a cota acabou, a fila pausa e sai o evento `system.quota` com o horário previsto de volta. O Renfield avisa, a cena mostra os agentes descansando, e a fila volta a andar sozinha.
 - **Visibilidade:** o painel mostra os tokens consumidos por tarefa.
 
 ### O resto também é gratuito
@@ -719,7 +720,7 @@ As perguntas originais ficam abaixo como registro.
 ## 16. Premissas (mudo se você discordar)
 
 - **Usuário:** um único usuário, com vários dispositivos. O Shack é de uso pessoal, com o seu login.
-- **Chat:** uma conversa contínua com o Marvin, no estilo Alexa. O histórico fica salvo e a sessão do SDK se compacta sozinha.
+- **Chat:** uma conversa contínua com o Renfield, no estilo Alexa. O histórico fica salvo e a sessão do SDK se compacta sozinha.
 - **Concorrência:** uma tarefa por vez por agente.
 - **Git:** o etnaD usa um branch próprio por tarefa e faz commit sem push.
 - **Feedback:** regras e memórias vindas de feedback entram ativas e aparecem como "novas" para revisão.

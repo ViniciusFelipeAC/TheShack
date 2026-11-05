@@ -8,7 +8,7 @@ import { parseWhen, tzOffsetMs } from './time.ts';
 const { rrulestr } = rrulePkg as unknown as typeof import('rrule');
 type Row = Record<string, unknown>;
 
-/** Qualquer agenda: a local agora, o Google Calendar depois, sem mudar a API nem as ferramentas do Marvin. */
+/** Qualquer agenda: a local agora, o Google Calendar depois, sem mudar a API nem as ferramentas do Renfield. */
 export interface CalendarProvider {
   list(from: Date, to: Date): CalendarOccurrence[];
   get(id: string): CalendarEvent;

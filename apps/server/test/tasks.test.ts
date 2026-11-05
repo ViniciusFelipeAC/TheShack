@@ -19,7 +19,7 @@ test('health é público, e o resto exige token', async (t) => {
 test('lista os dois agentes, ociosos', async (t) => {
   const s = setup(); t.after(s.cleanup);
   const r = await s.call('GET', '/agents');
-  assert.deepEqual(r.body.map((a: { id: string }) => a.id), ['etnad', 'marvin']);
+  assert.deepEqual(r.body.map((a: { id: string }) => a.id), ['etnad', 'renfield']);
   assert.ok(r.body.every((a: { status: string }) => a.status === 'idle'));
   assert.deepEqual(r.body[0].models, ['opus', 'sonnet']);
 });
@@ -85,7 +85,7 @@ test('responder pela rota de input libera a tarefa', async (t) => {
 
 test('cancelar no meio, e repetir depois', async (t) => {
   const s = setup({ stepMs: 200 }); t.after(s.cleanup);
-  const { body: task } = await s.call('POST', '/tasks', { assignee: 'marvin', title: 'Longa', prompt: 'demora' });
+  const { body: task } = await s.call('POST', '/tasks', { assignee: 'renfield', title: 'Longa', prompt: 'demora' });
   await until(s, task.id, 'running');
   const r = await s.call('POST', `/tasks/${task.id}/cancel`);
   assert.equal(r.body.status, 'cancelled');
@@ -108,8 +108,8 @@ test('falha deixa o agente com erro até você limpar', async (t) => {
 
 test('a fila respeita a concorrência do manifesto', async (t) => {
   const s = setup({ stepMs: 30 }); t.after(s.cleanup);
-  const a = (await s.call('POST', '/tasks', { assignee: 'marvin', title: 'A', prompt: 'a' })).body;
-  const b = (await s.call('POST', '/tasks', { assignee: 'marvin', title: 'B', prompt: 'b' })).body;
+  const a = (await s.call('POST', '/tasks', { assignee: 'renfield', title: 'A', prompt: 'a' })).body;
+  const b = (await s.call('POST', '/tasks', { assignee: 'renfield', title: 'B', prompt: 'b' })).body;
   await until(s, a.id, 'running');
   assert.equal((await statusOf(s, b.id)).status, 'queued');
   const doneA = await until(s, a.id, 'done');
@@ -129,7 +129,7 @@ test('valida entradas e agentes desconhecidos', async (t) => {
 
 test('lista tarefas com paginação', async (t) => {
   const s = setup({ stepMs: 1 }); t.after(s.cleanup);
-  for (let i = 0; i < 5; i++) await s.call('POST', '/tasks', { assignee: 'marvin', title: `T${i}`, prompt: 'p' });
+  for (let i = 0; i < 5; i++) await s.call('POST', '/tasks', { assignee: 'renfield', title: `T${i}`, prompt: 'p' });
   const first = (await s.call('GET', '/tasks?limit=3')).body;
   assert.equal(first.items.length, 3);
   assert.ok(first.nextCursor);

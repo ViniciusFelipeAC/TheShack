@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assistantTools } from '../src/marvin/assistant-tools.ts';
+import { assistantTools } from '../src/renfield/assistant-tools.ts';
 import { setup, waitFor } from './helpers.ts';
 
 type S = ReturnType<typeof setup>;
@@ -122,7 +122,7 @@ test('timer termina na hora, com prioridade alta', async (t) => {
   assert.equal(s.shack.timers.get(other.id).status, 'cancelled');
 });
 
-test('listas: padrão, itens, marcar e limpar; o Marvin cria lista se precisar', async (t) => {
+test('listas: padrão, itens, marcar e limpar; o Renfield cria lista se precisar', async (t) => {
   const s = setup(); t.after(s.cleanup);
   const all = (await s.call('GET', '/lists')).body as Array<{ id: string; name: string }>;
   assert.deepEqual(all.map((l) => l.name), ['Afazeres', 'Mercado']);
@@ -167,8 +167,8 @@ test('modo foco segura o que não é urgente e manda um resumo no fim', async (t
   const s = setup(); t.after(s.cleanup);
   await s.call('POST', '/push/subscriptions', { endpoint: 'https://push.example.com/x', keys: { p256dh: 'p', auth: 'a' } });
   await s.call('PUT', '/settings/mode', { name: 'foco' });
-  s.shack.notifier.notify({ title: 'Lista atualizada', body: 'Leite', priority: 'normal', kind: 'marvin' });
-  s.shack.notifier.notify({ title: 'Servidor caiu', body: 'urgente', priority: 'high', kind: 'marvin' });
+  s.shack.notifier.notify({ title: 'Lista atualizada', body: 'Leite', priority: 'normal', kind: 'renfield' });
+  s.shack.notifier.notify({ title: 'Servidor caiu', body: 'urgente', priority: 'high', kind: 'renfield' });
   await waitFor(() => s.pushes.length === 1, 'só o urgente vai por push');
   assert.equal(s.pushes[0]!.payload.title, 'Servidor caiu');
   assert.equal((await notifications(s)).find((n) => n.title === 'Lista atualizada')!.silenced, true);
@@ -191,7 +191,7 @@ test('tarefa de outro agente também vira notificação', async (t) => {
   assert.equal(n.body, 'Revisar README');
 });
 
-test('ferramentas do Marvin: compromisso, lembrete recorrente e timer', async (t) => {
+test('ferramentas do Renfield: compromisso, lembrete recorrente e timer', async (t) => {
   const s = setup(); t.after(s.cleanup);
   s.setNow('2026-10-21T15:00:00Z');
   const ctx = { conversationId: 'main' };

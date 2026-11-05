@@ -26,7 +26,7 @@ async function start(t: { after(fn: () => void): void }) {
 
 test('websocket: autentica, faz replay e recebe eventos ao vivo', async (t) => {
   const { s, connect } = await start(t);
-  const before = (await s.call('POST', '/tasks', { assignee: 'marvin', title: 'Antes', prompt: 'x' })).body;
+  const before = (await s.call('POST', '/tasks', { assignee: 'renfield', title: 'Antes', prompt: 'x' })).body;
   const { ws, msgs } = await connect();
 
   ws.send(JSON.stringify({ type: 'auth', token: s.token }));
@@ -34,7 +34,7 @@ test('websocket: autentica, faz replay e recebe eventos ao vivo', async (t) => {
   ws.send(JSON.stringify({ type: 'subscribe', since: 0 }));
   await waitFor(() => msgs.find((m) => m.event?.type === 'task.created' && m.event.taskId === before.id), 'replay');
 
-  const after = (await s.call('POST', '/tasks', { assignee: 'marvin', title: 'Depois', prompt: 'y' })).body;
+  const after = (await s.call('POST', '/tasks', { assignee: 'renfield', title: 'Depois', prompt: 'y' })).body;
   await waitFor(() => msgs.find((m) => m.event?.type === 'task.done' && m.event.taskId === after.id), 'evento ao vivo');
 
   ws.send(JSON.stringify({ type: 'ping' }));

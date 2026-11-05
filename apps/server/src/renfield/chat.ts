@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type { Approval, ChatMessage, ChatStyle, Conversation, Decision, Task } from '@shack/shared';
+import type { Approval, Attachment, ChatMessage, ChatStyle, Conversation, Decision, Task } from '@shack/shared';
 import type { Approvals } from '../core/approvals.ts';
 import type { EventBus } from '../core/events.ts';
 import type { Registry } from '../core/registry.ts';
 import type { TaskBus } from '../core/task-bus.ts';
 import type { Workspaces } from '../core/workspaces.ts';
-import type { ChatRepo } from '../db/marvin-repos.ts';
-import { errorMessage, HttpError, notFound } from '../errors.ts';
+import type { ChatRepo } from '../db/renfield-repos.ts';
+import { badRequest, errorMessage, HttpError, notFound } from '../errors.ts';
+import type { AttachmentData, Attachments } from './attachments.ts';
 import type { ChatEngine } from './engine.ts';
 import type { Mind } from './mind.ts';
 import { buildContext, buildSystemPrompt } from './prompt.ts';
@@ -20,12 +21,12 @@ export type SendResult = { message: ChatMessage; reply: Promise<ChatMessage> | n
 
 export type ChatServiceOptions = {
   repo: ChatRepo; bus: EventBus; tasks: TaskBus; registry: Registry; approvals: Approvals; mind: Mind; workspaces: Workspaces;
-  engine: ChatEngine; timezone: string;
+  engine: ChatEngine; timezone: string; attachments: Attachments;
 };
 
-/** Conversa com o Marvin: histórico, fila por conversa, streaming e avisos de tarefas. */
+/** Conversa com o Renfield: histórico, fila por conversa, streaming e avisos de tarefas. */
 export class ChatService {
-  readonly agentId = 'marvin';
+  readonly agentId = 'renfield';
   #o: ChatServiceOptions;
   #queues = new Map<string, Promise<unknown>>();
   #deltaListeners = new Set<(d: ChatDelta) => void>();
@@ -57,20 +58,24 @@ export class ChatService {
     return this.#o.repo.messages(conversationId, limit, before);
   }
 
-  send(conversationId: string, text: string, style: ChatStyle, deviceId: string | null): SendResult {
+  send(conversationId: string, text: string, style: ChatStyle, deviceId: string | null, attachmentIds: string[] = []): SendResult {
     const conv = this.conversation(conversationId);
-    const message = this.#add({ conversationId, role: 'user', kind: 'text', text, style, taskId: null, deviceId });
+    text = text.trim();
+    const attached = attachmentIds.length ? this.#o.attachments.check(attachmentIds) : [];
+    if (!text && !attached.length) throw badRequest('Escreva uma mensagem ou anexe um arquivo.');
+    const message = this.#add({ conversationId, role: 'user', kind: 'text', text, style, taskId: null, deviceId }, undefined, attached.map((a) => a.id));
 
-    const pending = this.#approvalAnswer(text);
+    // Com anexo, "sim" é conversa, não resposta a uma aprovação.
+    const pending = attached.length ? null : this.#approvalAnswer(text);
     if (pending) {
       this.#o.approvals.resolve(pending.approval.id, pending.decision, undefined, deviceId);
-      // Se a aprovação era do próprio Marvin, a resposta vem da vez dele que estava esperando.
+      // Se a aprovação era do próprio Renfield, a resposta vem da vez dele que estava esperando.
       if (pending.approval.agentId === this.agentId) return { message, reply: null };
       const name = this.#o.registry.get(pending.approval.agentId)?.manifest?.name ?? pending.approval.agentId;
       const text = pending.decision === 'approve' ? `Perfeitamente. Autorizei o pedido do ${name}.` : `Entendido. Neguei o pedido do ${name}.`;
       return { message, reply: Promise.resolve(this.#add({ conversationId, role: 'assistant', kind: 'text', text, style, taskId: null, deviceId: null })) };
     }
-    return { message, reply: this.#enqueue(conv.id, () => this.#turn(conv, text, style)) };
+    return { message, reply: this.#enqueue(conv.id, () => this.#turn(conv, text, style, message.attachments)) };
   }
 
   /** "sim" ou "não" respondem a aprovação pendente, quando há exatamente uma. */
@@ -90,11 +95,11 @@ export class ChatService {
     return next;
   }
 
-  async #turn(conv: Conversation, text: string, style: ChatStyle): Promise<ChatMessage> {
+  async #turn(conv: Conversation, text: string, style: ChatStyle, attached: Attachment[] = []): Promise<ChatMessage> {
     const { registry, tasks, mind, approvals, engine, timezone } = this.#o;
     const base = { conversationId: conv.id, role: 'assistant' as const, style, taskId: null, deviceId: null };
     const def = registry.get(this.agentId);
-    if (!def?.manifest) return this.#add({ ...base, kind: 'error', text: `O Marvin está desativado: ${def?.error ?? 'a pasta agents/marvin não existe.'}` });
+    if (!def?.manifest) return this.#add({ ...base, kind: 'error', text: `O Renfield está desativado: ${def?.error ?? 'a pasta agents/renfield não existe.'}` });
 
     const streamId = randomUUID();
     tasks.setChatActivity(this.agentId, 'Respondendo você');
@@ -104,7 +109,8 @@ export class ChatService {
       const cutoff = Date.now() - 2 * 3_600_000;
       const result = await engine.turn({
         conversationId: conv.id,
-        text,
+        text: text || '(Mensagem só com anexos.)',
+        attachments: this.#files(attached),
         manifest: def.manifest,
         systemPrompt: buildSystemPrompt({ persona: def.persona, agents, memories: mind.memories(), rules: mind.rules(), modes: mind.modes() }),
         context: buildContext({
@@ -156,8 +162,17 @@ export class ChatService {
     this.#add({ conversationId, role: 'assistant', kind: 'task_notice', text, style: null, taskId: task.id, deviceId: null });
   }
 
-  #add(m: Omit<ChatMessage, 'id' | 'createdAt'>, streamId?: string): ChatMessage {
-    const message = this.#o.repo.addMessage(m);
+  /** Lê os arquivos dos anexos. Um arquivo que sumiu do disco vira um aviso em vez de derrubar a resposta. */
+  #files(attached: Attachment[]): AttachmentData[] {
+    return attached.map((a) => {
+      try { return this.#o.attachments.read(a.id); } catch {
+        return { meta: { ...a, kind: 'text' as const, mime: 'text/plain' }, data: Buffer.from('[O arquivo deste anexo não foi encontrado no servidor.]') };
+      }
+    });
+  }
+
+  #add(m: Omit<ChatMessage, 'id' | 'createdAt' | 'attachments'>, streamId?: string, attachmentIds: string[] = []): ChatMessage {
+    const message = this.#o.repo.addMessage(m, attachmentIds);
     this.#o.bus.publish('chat.message', { message, streamId: streamId ?? null }, { agentId: this.agentId });
     return message;
   }

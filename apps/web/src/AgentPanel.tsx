@@ -108,7 +108,7 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
         {v.files.length > 0 && <p className="meta">Mudou de verdade: {v.files.slice(0, 6).join(', ')}{v.files.length > 6 ? ` e mais ${v.files.length - 6}` : ''}</p>}
         <p className="meta">O relatório dizia: {current.result.summary}</p>
         <div className="row wrap">
-          <button className="btn primary" type="button" onClick={() => onAsk(`Revise com o ${a.name} a tarefa "${current.title}": o resultado ficou suspeito. `)}>Pedir ao Marvin</button>
+          <button className="btn primary" type="button" onClick={() => onAsk(`Revise com o ${a.name} a tarefa "${current.title}": o resultado ficou suspeito. `)}>Pedir ao Renfield</button>
           <button className="btn" type="button" disabled={busy} onClick={() => act(`/agents/${a.id}/clear-error`)}>Já conferi</button>
         </div>
       </div>
@@ -148,7 +148,7 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
     main = (
       <div className="box">
         <h4>Sem tarefa agora</h4>
-        <p>{a.chat ? `O ${a.name} está à disposição. Fale com ele no chat.` : `Para dar trabalho ao ${a.name}, peça ao Marvin no chat.`}</p>
+        <p>{a.chat ? `O ${a.name} está à disposição. Fale com ele no chat.` : `Para dar trabalho ao ${a.name}, peça ao Renfield no chat.`}</p>
         <div className="row"><button className="btn" type="button" onClick={() => onAsk(a.chat ? '' : `Peça ao ${a.name} para `)}>{a.chat ? 'Ir para o chat' : 'Pedir algo'}</button></div>
       </div>
     );
