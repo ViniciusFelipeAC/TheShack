@@ -1,0 +1,30 @@
+{
+  "name": "the-shack",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.ts",
+    "dev:server": "npm run dev -w @shack/server",
+    "dev:web": "npm run dev -w @shack/web",
+    "build": "npm run build -w @shack/web",
+    "build:web": "npm run build -w @shack/web",
+    "start": "npm run start -w @shack/server",
+    "test": "npm test -w @shack/server && npm test -w @shack/web",
+    "typecheck": "tsc -p tsconfig.json",
+    "token": "npm run token -w @shack/server --",
+    "icons": "node scripts/icons.ts",
+    "shortcut": "node scripts/shortcut.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
+    "typescript": "^7.0.2"
+  }
+}
