@@ -18,6 +18,10 @@ tools:
 workspace: required
 
 permissions:
+  # free: roda qualquer comando dentro do workspace e só pede o arriscado
+  #   (git que muda branch ou commit, credenciais, processos, sistema, rede externa, fora do workspace).
+  # allowlist: só roda sozinho o que está em autoApprove e pede o resto.
+  shell: free
   autoApprove:          # comandos que rodam sem pedir aprovação
     - "Bash(git status*)"
     - "Bash(git diff*)"
@@ -26,6 +30,7 @@ permissions:
     - "Bash(npm run test*)"
   deny:                 # comandos sempre bloqueados
     - "Bash(git push*)"
+    - "PowerShell(git push*)"
 
 limits:
   concurrency: 1

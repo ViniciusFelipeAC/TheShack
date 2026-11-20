@@ -107,6 +107,8 @@ export function planHouse(agents: Array<{ id: string; kind: StationKind }>): Hou
   for (const x of [13, 14, 15, 16]) { block(x, 8); block(x, 9); }
   block(1, 11);
   block(18, 11);
+  // rack da TV, encostado na parede de baixo e virado para o sofá
+  for (const x of [13, 14, 15]) block(x, 11);
 
   // estações: duas no cômodo principal e duas por ala
   const stations: Station[] = [];

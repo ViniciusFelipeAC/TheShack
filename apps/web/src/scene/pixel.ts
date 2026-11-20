@@ -69,6 +69,27 @@ export function ellipse(g: Ctx, cx: number, cy: number, rx: number, ry: number, 
   }
 }
 
+/**
+ * Contorno de 1 pixel em volta do que é opaco, na cor do vizinho escurecida.
+ * Sombras semitransparentes no chão não contam como corpo e podem ser cobertas pelo contorno.
+ */
+export function outline(c: HTMLCanvasElement, k = 0.32): void {
+  const g = c.getContext('2d')!, w = c.width, h = c.height;
+  const img = g.getImageData(0, 0, w, h), d = img.data, src = new Uint8ClampedArray(d);
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && src[(y * w + x) * 4 + 3] >= 200;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (src[i + 3] >= 200) continue;
+      const n = [[x, y + 1], [x - 1, y], [x + 1, y], [x, y - 1]].find(([nx, ny]) => solid(nx, ny));
+      if (!n) continue;
+      const j = (n[1] * w + n[0]) * 4;
+      d[i] = src[j] * k; d[i + 1] = src[j + 1] * k; d[i + 2] = src[j + 2] * k; d[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+}
+
 const GLYPH: Record<string, string[]> = {
   '?': ['111', '001', '010', '000', '010'],
   x: ['101', '101', '010', '101', '101'],

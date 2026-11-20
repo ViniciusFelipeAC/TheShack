@@ -9,7 +9,7 @@ Sistema pessoal de agentes de IA. O Renfield é o mordomo e a porta de entrada; 
 - **Anexos:** mande fotos, PDFs e arquivos de texto ao Renfield pelo **+** ao lado da caixa de texto, colando com Ctrl+V ou arrastando para o chat.
 
 - **O Renfield:** lembra de você, aprende regras e delega ao etnaD.
-- **O etnaD:** trabalha num branch próprio dentro das pastas que você cadastrar. Ele pede sua aprovação para comandos fora da lista e entrega um relatório com o que mudou, onde e como testar.
+- **O etnaD:** trabalha num branch próprio dentro das pastas que você cadastrar. Ele roda comandos à vontade dentro da pasta, pede sua aprovação só para os arriscados (git, rede, credenciais, sistema, fora da pasta) e entrega um relatório com o que mudou, onde e como testar.
 
 ## Requisitos
 
@@ -42,13 +42,18 @@ npm start
 
 Depois de mudar o código do app, rode `npm run build` de novo. O servidor pega o build novo sem reiniciar.
 
-### Atalho na Área de Trabalho
+### Atalho
 
 ```powershell
 npm run shortcut
 ```
 
-Cria o atalho **The Shack**. Ao abrir, ele sobe o servidor numa janela minimizada, "The Shack (servidor)", e abre o app numa janela própria do Edge. Se o servidor já estiver no ar, só abre o app. Se o código do app mudou desde o último build (depois de um `git pull`, por exemplo), ele roda `npm run build` antes. Para desligar o servidor, feche aquela janela.
+No Windows, cria o atalho **The Shack** na Área de Trabalho. Ao abrir, ele sobe o servidor numa janela minimizada, "The Shack (servidor)", e abre o app numa janela própria do Edge. Se o servidor já estiver no ar, só abre o app. Se o código do app mudou desde o último build (depois de um `git pull`, por exemplo), ele roda `npm run build` antes. Para desligar o servidor, feche aquela janela.
+
+No Linux, cria o lançador **The Shack** no menu de aplicativos. No GNOME, que não mostra ícones na Área de Trabalho, procure por ele em Atividades e fixe-o na barra. Ele faz o mesmo que o do Windows, com duas diferenças:
+
+- **O servidor roda sem janela,** como o serviço `the-shack` do systemd do seu usuário. Para desligá-lo, clique com o botão direito no ícone e escolha **Desligar o servidor**. Se ele não subir, o erro aparece em `journalctl --user -u the-shack`.
+- **A janela própria precisa de um navegador baseado no Chromium** (Chrome, Edge, Chromium ou Brave). Sem nenhum deles, o app abre no navegador padrão.
 
 O app em `:4321` guarda o login separado do `:5173` do `npm run dev`. Na primeira vez, cole o token de novo ou pareie com um código.
 
@@ -77,6 +82,10 @@ O iPhone só instala apps da web e só entrega notificações com HTTPS. O Tails
 - **Se a cota do plano acabar,** quem está livre vai cochilar no sofá até ela voltar.
 - **Cartões no canto de baixo:** mostram cada agente e o que ele está fazendo. Toque num cartão ou no personagem para abrir o painel, com a tarefa atual, o progresso, a fila, o histórico com os relatórios e os botões de aprovar, cancelar e tentar de novo.
 - **Chat:** fica sempre ao lado. No celular, é a gaveta de baixo; toque em **Abrir**.
+  - **Enter** manda e **Shift+Enter** quebra a linha. No iPhone, a tecla de retorno manda.
+  - No computador, arraste a borda entre a casa e o chat para mudar a largura. Dois cliques na borda voltam ao padrão.
+  - O lápis abre uma **conversa nova e limpa**, como o `/clear` do Claude Code. O Renfield continua com as memórias e regras, mas não carrega o que foi dito antes. O relógio mostra as conversas anteriores, e todos os aparelhos ficam na mesma conversa.
+- **Modelo e esforço:** no painel de cada agente, troque o modelo e o esforço, como o `/model` e o `/effort` do Claude Code. Cada opção traz uma legenda, como no seletor do VS Code. A troca vale em todos os aparelhos e não muda o `agent.yaml`; "Do agente" volta ao que o arquivo diz.
 - **Menu:** traz a agenda, os lembretes e timers, as listas, as notas, o clima da cena e as configurações. As telas abrem por cima da casa.
 - **Navegação:** **Ver lá fora** mostra a casa por fora, e tocar na porta também troca. Arraste para andar pela casa e use a roda do mouse, a pinça ou os botões + e − para o zoom.
 - **Hora da cena:** segue a hora de São Paulo, então à noite a casa escurece e as janelas acendem.
@@ -86,7 +95,7 @@ O iPhone só instala apps da web e só entrega notificações com HTTPS. O Tails
 
 1. No app, abra **Menu**, depois **Configurações**, depois **Workspaces**, e cadastre a pasta de um projeto com o caminho completo, por exemplo `C:\Users\voce\projetos\meu-app`.
 2. Peça no chat, por exemplo: "Peça ao etnaD para adicionar testes no módulo de datas do meu-app".
-3. Veja o etnaD ir até a mesa e trabalhar, e toque nele para acompanhar o progresso. Se ele precisar rodar um comando fora da lista, aparece um cartão com Aprovar e Negar, no chat e no painel dele. Se tiver uma dúvida, aparece um cartão com as opções.
+3. Veja o etnaD ir até a mesa e trabalhar, e toque nele para acompanhar o progresso. Se ele precisar rodar um comando arriscado, aparece um cartão com Aprovar, Negar e o motivo, no chat e no painel dele. Se travar numa dúvida que não consegue decidir sozinho, aparece um cartão com as opções.
 4. No fim, o Renfield posta o relatório no chat. Em projetos git, as mudanças ficam num branch `etnad/...`, e o seu branch não é tocado. Para revisar, use o comando que vem no relatório, por exemplo `git diff main..etnad/...`.
 
 **O servidor confere o relatório.** Em projetos git, ele compara o que o etnaD disse com o diff de verdade. Se o relatório citar mudanças que o git não mostra, a tarefa aparece como **suspeita**: o aviso sobe de prioridade, o etnaD fica com o sinal de erro na casa e o painel mostra o que mudou de fato. Sem git, o aviso diz que não deu para conferir.
@@ -144,7 +153,7 @@ Com o servidor no ar, num segundo terminal:
 $h = @{ Authorization = "Bearer shk_COLE_SEU_TOKEN" }
 $api = "http://127.0.0.1:4321/api/v1"
 $json = '{"text":"Boa tarde, Renfield. O que o etnaD está fazendo?"}'
-(Invoke-RestMethod "$api/conversations/main/messages?wait=true" -Method Post -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json))).reply.text
+(Invoke-RestMethod "$api/conversations/current/messages?wait=true" -Method Post -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json))).reply.text
 ```
 
 Se os acentos aparecerem quebrados no terminal, rode `chcp 65001` antes. Para mandar texto com acento, use `[Text.Encoding]::UTF8.GetBytes(...)` como no exemplo.

@@ -22,7 +22,12 @@ export class FakeEngine implements ChatEngine {
     }
   }
 
-  reset(): void {}
+  /** Conversas cujo Claude Code foi fechado (undefined = todas, no desligamento). */
+  resets: Array<string | undefined> = [];
+
+  reset(conversationId?: string): void {
+    this.resets.push(conversationId);
+  }
 
   get last(): TurnInput {
     return this.turns[this.turns.length - 1]!;

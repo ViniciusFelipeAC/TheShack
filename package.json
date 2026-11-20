@@ -20,7 +20,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "token": "npm run token -w @shack/server --",
     "icons": "node scripts/icons.ts",
-    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/shortcut.ps1"
+    "shortcut": "node scripts/shortcut.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

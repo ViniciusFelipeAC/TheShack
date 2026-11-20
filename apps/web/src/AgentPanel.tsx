@@ -1,5 +1,6 @@
 import type { AccountStatus, AgentInfo, Approval, ShackEvent, Task, TaskDetail } from '@shack/shared';
 import { useEffect, useState } from 'react';
+import { AgentModel } from './AgentModel.tsx';
 import { api } from './live.ts';
 import { ApprovalCard } from './pages/Chat.tsx';
 import { Portrait } from './Portrait.tsx';
@@ -83,7 +84,6 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
   };
   const nameOf = (id?: string) => agents.find((x) => x.id === id)?.name ?? id ?? '';
   const origin = (t: Task) => (t.origin.kind === 'agent' ? `Pedida por ${nameOf(t.origin.agentId)}` : t.origin.kind === 'schedule' ? 'Agendada' : 'Pedida por você');
-  const model = account?.agentModels?.[a.id];
   const mine = approvals.filter((p) => p.agentId === a.id);
 
   let main;
@@ -203,7 +203,7 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
           ))}
         </ul>
       </div>
-      {model && <p className="meta">Modelo do plano: {model}</p>}
+      {a.status !== 'disabled' && <AgentModel agent={a} account={account} />}
     </section>
   );
 }

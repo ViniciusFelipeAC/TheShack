@@ -7,7 +7,17 @@ const s = (v: unknown): string => String(v);
 const b = (v: unknown): boolean => Number(v) === 1;
 
 /* ---------- conversas e mensagens ---------- */
-const toConversation = (r: Row): Conversation => ({ id: s(r.id), agentId: s(r.agent_id), title: s(r.title), createdAt: s(r.created_at), updatedAt: s(r.updated_at) });
+// A prévia é a primeira mensagem sua com texto: é por ela que você reconhece a conversa no histórico.
+const CONVERSATION = `SELECT c.*,
+  (SELECT m.text FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user' AND m.text <> '' ORDER BY m.created_at, m.rowid LIMIT 1) AS preview,
+  (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count
+  FROM conversations c`;
+const CURRENT_KEY = 'chat.current';
+const toConversation = (r: Row): Conversation => ({
+  id: s(r.id), agentId: s(r.agent_id), title: s(r.title),
+  preview: r.preview ? s(r.preview).replace(/\s+/g, ' ').trim().slice(0, 120) : null, messageCount: Number(r.message_count ?? 0),
+  createdAt: s(r.created_at), updatedAt: s(r.updated_at),
+});
 const toMessage = (r: Row): ChatMessage => ({
   id: s(r.id), conversationId: s(r.conversation_id), role: r.role as ChatMessage['role'], kind: r.kind as MessageKind,
   text: s(r.text), style: str(r.style) as ChatStyle | null, taskId: str(r.task_id), deviceId: str(r.device_id), attachments: [], createdAt: s(r.created_at),
@@ -27,13 +37,27 @@ function withAttachments(db: Db, msgs: ChatMessage[]): ChatMessage[] {
 
 export function chatRepo(db: Db) {
   const get = (id: string): Conversation | null => {
-    const r = db.prepare('SELECT * FROM conversations WHERE id = ?').get(id);
+    const r = db.prepare(`${CONVERSATION} WHERE c.id = ?`).get(id);
     return r ? toConversation(r) : null;
   };
+  const exists = (id: string): boolean => db.prepare('SELECT 1 FROM conversations WHERE id = ?').get(id) !== undefined;
   return {
     get,
     list(): Conversation[] {
-      return db.prepare('SELECT * FROM conversations ORDER BY updated_at DESC').all().map(toConversation);
+      return db.prepare(`${CONVERSATION} ORDER BY c.updated_at DESC, c.rowid DESC`).all().map(toConversation);
+    },
+    /** A conversa aberta no app. Sem escolha (ou se ela sumiu), é a principal. */
+    currentId(): string {
+      const id = str(db.prepare('SELECT value FROM settings WHERE key = ?').get(CURRENT_KEY)?.value);
+      return id && exists(id) ? id : 'main';
+    },
+    setCurrentId(id: string): void {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(CURRENT_KEY, id);
+    },
+    /** Apaga a conversa só se ela nunca recebeu mensagem. A principal fica sempre. */
+    dropIfEmpty(id: string): boolean {
+      return Number(db.prepare(`DELETE FROM conversations WHERE id = ? AND id <> 'main'
+        AND NOT EXISTS (SELECT 1 FROM messages WHERE conversation_id = ?)`).run(id, id).changes) === 1;
     },
     create(agentId: string, title: string): Conversation {
       const id = randomUUID(), at = now();

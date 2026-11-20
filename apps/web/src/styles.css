@@ -63,7 +63,16 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; font-family: ui-mono
 .house-app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px;
   padding: max(12px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 html[data-keyboard] .house-app { padding-bottom: 8px; }
-@media (min-width: 900px) { .house-app { grid-template-columns: minmax(0, 1fr) 380px; } }
+/* No computador, o divisor ocupa o vão entre a casa e o chat; a largura do chat vem de --chat-w (Splitter.tsx). */
+@media (min-width: 900px) { .house-app { grid-template-columns: minmax(0, 1fr) 12px var(--chat-w, 380px); column-gap: 0; } }
+.splitter { display: none; }
+@media (min-width: 900px) {
+  .splitter { display: block; position: relative; cursor: col-resize; touch-action: none; }
+  .splitter::after { content: ""; position: absolute; top: 14px; bottom: 14px; left: 5px; width: 2px; border-radius: 2px; background: transparent; transition: background 0.15s; }
+  .splitter:hover::after, .splitter:focus-visible::after, .splitter[data-dragging]::after { background: var(--amber); }
+  .splitter:focus-visible { outline: none; }
+}
+html.resizing, html.resizing * { cursor: col-resize !important; user-select: none; -webkit-user-select: none; }
 .stage { position: relative; min-height: 0; min-width: 0; border-radius: 14px; overflow: hidden; background: #0d1312; border: 1px solid var(--line); }
 .scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 
@@ -167,8 +176,38 @@ html[data-keyboard] .house-app { padding-bottom: 8px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 10px; }
 .chip { padding: 6px 10px; border-radius: 99px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); cursor: pointer; font-size: 12.5px; text-align: left; }
 .chip:hover { border-color: rgba(240, 176, 94, 0.5); }
-.compose { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+.compose { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--line); align-items: flex-end; }
 .compose select { flex: none; padding: 9px 6px; }
+/* Altura de uma linha fixa em 42 px (22 + 18 de respiro + 2 de borda), com qualquer tamanho de letra; os botões acompanham. */
+.compose textarea { flex: 1; width: auto; min-width: 0; resize: none; font-family: var(--font-ui); font-size: 15px; line-height: 22px; padding: 9px 12px; max-height: 152px; overflow-y: auto; }
+.compose textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compose > .btn, .compose > select { height: 42px; }
+.icon-btn { width: 38px; padding: 0; justify-content: center; flex: none; }
+.icon-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tbtn:disabled { opacity: 0.45; cursor: default; }
+.chead { position: relative; }
+.conv-menu { position: absolute; top: calc(100% + 4px); right: 12px; z-index: 6; width: min(320px, calc(100% - 24px)); max-height: min(420px, 55vh); overflow: auto; padding: 6px; display: flex; flex-direction: column; background: var(--panel); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+.conv-menu h4 { margin: 4px 8px 6px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); font-weight: 700; }
+.conv-menu > p { padding: 4px 8px 8px; }
+.conv-menu button { display: flex; flex-direction: column; align-items: stretch; gap: 1px; text-align: left; padding: 8px 10px; border: 0; border-left: 2px solid transparent; border-radius: 8px; background: none; cursor: pointer; font-size: 14px; min-width: 0; }
+.conv-menu button:hover, .conv-menu button:focus-visible { background: rgba(255, 255, 255, 0.07); outline: none; }
+.conv-menu button[aria-checked="true"] { border-left-color: var(--amber); background: var(--amber-soft); }
+.model-box { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+/* Seletor com legenda (Picker.tsx): nome em cima, frase embaixo, como o de modelos do VS Code. */
+.picker { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.picker-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; text-align: left; }
+.picker-text .meta { font-size: 12.5px; line-height: 1.35; }
+.picker-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
+.picker-btn:hover { border-color: rgba(240, 176, 94, 0.45); }
+.picker-btn[aria-expanded="true"] { border-color: var(--amber); }
+.picker-btn:disabled { opacity: 0.6; cursor: default; }
+.picker-btn svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.picker-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.picker-list { display: flex; flex-direction: column; gap: 1px; padding: 4px; max-height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.picker-list > button { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 0; border-radius: 8px; background: none; cursor: pointer; min-width: 0; }
+.picker-list > button:hover, .picker-list > button:focus-visible { background: rgba(255, 255, 255, 0.07); outline: none; }
+.picker-list > button[aria-selected="true"] { background: var(--amber-soft); }
+.picker-check { color: var(--amber); font-weight: 700; flex: none; }
 
 /* ---------- avisos ---------- */
 .toasts { position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 32px)); }
@@ -229,12 +268,16 @@ textarea.prose { font-family: var(--font-ui); font-size: 15px; }
   html[data-keyboard] .chat { bottom: 8px; max-height: calc(100% - 16px); }
   .chat:not(.open) .msgs, .chat:not(.open) .chips, .chat:not(.open) .chat-approvals { display: none; }
   .ctoggle { display: inline-flex; }
+  /* Gaveta fechada mostra só o essencial; aberta, os botões de conversa entram e o retrato sai no celular estreito. */
+  .chat:not(.open) .conv-btn, .chat:not(.open) .conv-menu { display: none; }
+  .chead { gap: 6px; }
   .dock { bottom: 140px; gap: 6px; max-width: calc(100% - 20px); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .acard { width: auto; flex: none; padding: 6px 10px 6px 6px; }
   .acard .act { display: none; }
   .portrait { width: 36px; height: 36px; }
   .zoom { display: none; }
-  .drawer { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 72%; border-radius: 14px 14px 0 0; z-index: 12; padding-bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
+  /* A gaveta cobre o chat e os cartões; com o vidro claro demais, o texto deles aparecia por trás. */
+  .drawer { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 72%; border-radius: 14px 14px 0 0; z-index: 12; padding-bottom: max(14px, env(safe-area-inset-bottom, 0px)); background: var(--glass-strong); }
   .sheet { position: fixed; inset: 0; z-index: 20; background: var(--bg);
     padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
   .sheet .page-head { padding-right: 110px; }
@@ -253,9 +296,10 @@ textarea.prose { font-family: var(--font-ui); font-size: 15px; }
   .list-nav { position: static; }
   .msg { max-width: 92%; }
 }
+@media (max-width: 480px) { .chat.open .chead .portrait { display: none; } }
 /* Toque: no iPhone, campo com letra menor que 16px faz o Safari dar zoom ao tocar. */
 @media (pointer: coarse) {
-  input, select, textarea { font-size: 16px; }
+  input, select, textarea, .compose textarea { font-size: 16px; }
   .compose { gap: 6px; padding: 8px 10px 10px; }
   .compose select { width: 82px; }
   .compose .btn { padding: 8px 12px; }

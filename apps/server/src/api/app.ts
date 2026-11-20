@@ -1,13 +1,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  AgentInfo, Approval, ApprovalStatus, CreateTaskInput, Device, EventPage, EventType, page,
+  AgentInfo, AgentSettingsInput, Approval, ApprovalStatus, CreateTaskInput, Device, EventPage, EventType, page,
   PairingCode, PairInput, PairResult, Persona, ResolveApprovalInput, ShackEvent, Task, TaskDetail, TaskInput, TaskStatus,
 } from '@shack/shared';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { type Context, Hono } from 'hono';
-import { HttpError } from '../errors.ts';
+import { badRequest, conflict, HttpError } from '../errors.ts';
 import { remoteInfo } from '../system/remote.ts';
 import type { Shack } from '../shack.ts';
 import { type Env, ERRORS, IdParam, J } from './common.ts';
@@ -16,7 +16,7 @@ import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import { registerAssistantRoutes } from './assistant-routes.ts';
 import { WsHub, wsHandler } from './ws.ts';
 
-export const API_VERSION = '0.8.0';
+export const API_VERSION = '0.9.0';
 
 const PUBLIC_PATHS = new Set(['/api/v1/health', '/api/v1/auth/pair', '/api/v1/openapi.json', '/api/v1/ws']);
 
@@ -120,6 +120,22 @@ export function createApp(shack: Shack) {
     request: { params: IdParam, body: J(Persona) },
     responses: { 200: { ...J(Persona), description: 'Persona salva' }, 400: ERRORS[400], 401: ERRORS[401], 404: ERRORS[404], 409: ERRORS[409] },
   }), (c) => c.json({ content: registry.writePersona(c.req.valid('param').id, c.req.valid('json').content).persona }, 200));
+
+  api.openapi(createRoute({
+    method: 'put', path: '/agents/{id}/settings', tags: ['Agentes'],
+    summary: 'Troca o modelo e o esforço do agente, por cima do agent.yaml. null volta ao do arquivo.',
+    request: { params: IdParam, body: J(AgentSettingsInput) },
+    responses: { 200: { ...J(AgentInfo), description: 'Agente' }, 400: ERRORS[400], 401: ERRORS[401], 404: ERRORS[404], 409: ERRORS[409] },
+  }), (c) => {
+    const def = registry.require(c.req.valid('param').id);
+    if (!def.manifest) throw conflict(`O agente "${def.id}" está desativado: ${def.error}`);
+    const body = c.req.valid('json');
+    // A lista do plano chega na primeira conversa. Antes dela, o modelo passa e o pickModel cai na reserva se faltar.
+    const plan = shack.account.status.availableModels;
+    if (body.model && plan.length && !plan.some((m) => m.value === body.model)) throw badRequest(`O modelo "${body.model}" não está no seu plano.`);
+    shack.agentSettings.set(def.id, body);
+    return c.json(tasks.agentInfo(def), 200);
+  });
 
   api.openapi(createRoute({
     method: 'post', path: '/agents/{id}/clear-error', tags: ['Agentes'], summary: 'Tira o sinal de erro do agente na cena',

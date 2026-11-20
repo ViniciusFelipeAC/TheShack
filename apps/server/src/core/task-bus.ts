@@ -5,6 +5,7 @@ import type {
 import { type Db, now, tx } from '../db/database.ts';
 import type { TaskPatch, TasksRepo } from '../db/repos.ts';
 import { badRequest, conflict, errorMessage, HttpError, notFound } from '../errors.ts';
+import type { AgentSettingsStore } from './agent-settings.ts';
 import type { Approvals } from './approvals.ts';
 import type { EventBus } from './events.ts';
 import type { AgentDef, Registry } from './registry.ts';
@@ -59,6 +60,8 @@ export type TaskBusOptions = {
   registry: Registry;
   /** Nulo quando o agente não executa tarefas (por exemplo, o Renfield, que só conversa). */
   runnerFor: (agent: AgentDef) => AgentRunner | null;
+  /** Modelo e esforço trocados no app. Sem ele, vale só o agent.yaml. */
+  agentSettings?: AgentSettingsStore;
   workspaceExists?: (id: string) => boolean;
   progressThrottleMs?: number;
 };
@@ -70,6 +73,7 @@ export class TaskBus {
   #approvals: Approvals;
   #registry: Registry;
   #runnerFor: (agent: AgentDef) => AgentRunner | null;
+  #settings: AgentSettingsStore | null;
   #workspaceExists: (id: string) => boolean;
   #throttleMs: number;
   #live = new Map<string, Live>();
@@ -85,6 +89,7 @@ export class TaskBus {
     this.#approvals = o.approvals;
     this.#registry = o.registry;
     this.#runnerFor = o.runnerFor;
+    this.#settings = o.agentSettings ?? null;
     this.#workspaceExists = o.workspaceExists ?? (() => true);
     this.#throttleMs = o.progressThrottleMs ?? 500;
   }
@@ -207,7 +212,8 @@ export class TaskBus {
     const m = def.manifest;
     const base = {
       id: def.id, name: m?.name ?? def.id, role: m?.role ?? '', models: m ? [m.model].flat() : [],
-      effort: m?.effort ?? 'medium', chat: m?.chat ?? false, manifestError: def.error, appearance: m?.appearance ?? {},
+      effort: m?.effort ?? 'medium', settings: this.#settings?.get(def.id) ?? { model: null, effort: null },
+      chat: m?.chat ?? false, manifestError: def.error, appearance: m?.appearance ?? {},
     };
     if (!m) return { ...base, status: 'disabled', activity: def.error, currentTaskId: null };
 
@@ -253,7 +259,8 @@ export class TaskBus {
       .then(() => {
         const runner = this.#runnerFor(agent);
         if (!runner) throw new Error(`O ${agent.id} não executa tarefas.`);
-        return runner.run(started, agent, io);
+        // A troca de modelo e esforço vale a partir da tarefa seguinte; a que já roda segue como começou.
+        return runner.run(started, this.#settings?.apply(agent) ?? agent, io);
       })
       .then((result) => this.#finish(task.id, 'done', { result, finishedAt: now() }, null))
       .catch((err: unknown) => this.#finish(task.id, 'failed', { error: errorMessage(err), finishedAt: now() }, errorMessage(err)))

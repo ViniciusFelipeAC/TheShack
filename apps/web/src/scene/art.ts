@@ -51,6 +51,11 @@ export function buildInterior(L: HouseLayout): HTMLCanvasElement {
   // tapete do sofá e capacho
   R(g, 196, 162, 72, 28, '#18241f'); R(g, 198, 164, 68, 24, '#22322b');
   for (let x = 203; x < 264; x += 8) for (let y = 168; y < 186; y += 8) R(g, x, y, 2, 2, '#2c4038');
+  // dois controles largados no tapete, um de cada lado da TV
+  for (const [x, y, b] of [[208, 165, '#d9534f'], [250, 167, '#4f8fd9']] as const) {
+    R(g, x + 1, y, 5, 1, '#3c4048'); R(g, x, y + 1, 7, 2, '#2a2d33'); R(g, x, y + 3, 2, 1, '#2a2d33'); R(g, x + 5, y + 3, 2, 1, '#2a2d33');
+    R(g, x + 1, y + 1, 1, 1, '#5a5f66'); R(g, x + 5, y + 1, 1, 1, b); R(g, x + 4, y + 2, 1, 1, '#d9c34f'); R(g, x, y + 4, 7, 1, 'rgba(0,0,0,0.25)');
+  }
   R(g, 146, 178, 28, 12, '#1a1714'); R(g, 148, 180, 24, 8, '#2a241f'); R(g, 148, 183, 24, 1, '#1a1714'); R(g, 148, 186, 24, 1, '#1a1714');
   // parede de cima: vidro (pintado a cada quadro) e um trecho de madeira escura com arandela
   R(g, 16, 0, 224, 44, '#0f1517');
@@ -152,7 +157,7 @@ function concreteVase(g: Ctx, px: number): void {
   circle(g, px, 176, 7, '#2c5234'); circle(g, px - 2, 174, 4, '#376640'); circle(g, px + 3, 177, 3, '#376640'); R(g, px - 3, 172, 2, 1, '#5a8f5d');
 }
 
-export function buildFurniture(L: HouseLayout, hooks: { screens(s: Station): void; fire(): void }): Furniture[] {
+export function buildFurniture(L: HouseLayout, hooks: { screens(s: Station): void; fire(): void; tv(): void }): Furniture[] {
   const F: Furniture[] = [];
   const add = (x: number, y: number, w: number, h: number, sortY: number, fn: (g: Ctx) => void, extra?: () => void) => {
     const [c, g] = mk(w, h);
@@ -214,6 +219,19 @@ export function buildFurniture(L: HouseLayout, hooks: { screens(s: Station): voi
     R(g, 259, 118, 16, 32, '#121417'); R(g, 260, 118, 14, 1, '#2a2e33'); R(g, 259, 119, 1, 30, '#24282d');
     R(g, 261, 129, 12, 15, '#060707');
   }, hooks.fire);
+  add(204, 158, 56, 36, 190, (g) => { // rack com a TV de costas para nós, virada para o sofá, e o videogame
+    R(g, 207, 189, 50, 2, 'rgba(0,0,0,0.4)'); R(g, 208, 189, 2, 2, '#120d0a'); R(g, 254, 189, 2, 2, '#120d0a');
+    R(g, 206, 180, 52, 9, '#2a1f19'); R(g, 206, 184, 52, 1, '#221913'); R(g, 206, 180, 1, 9, '#352820'); R(g, 231, 181, 1, 7, '#1a1310');
+    R(g, 206, 177, 52, 3, '#4a3628'); R(g, 206, 177, 52, 1, '#5c4434');
+    R(g, 218, 160, 28, 17, '#16181b'); R(g, 218, 160, 28, 1, '#2b2f35'); R(g, 218, 160, 1, 17, '#23262b'); R(g, 218, 176, 28, 1, '#0d0e10');
+    R(g, 223, 163, 18, 11, '#1d2024'); R(g, 223, 163, 18, 1, '#2c3036');
+    for (let y = 165; y < 172; y += 2) for (let x = 226; x < 239; x += 3) R(g, x, y, 2, 1, '#0f1113');
+    R(g, 237, 171, 3, 2, '#3a3e44'); R(g, 229, 176, 6, 2, '#1d2024'); R(g, 225, 177, 14, 2, '#25282d'); R(g, 233, 177, 1, 4, '#0e0f11');
+    // o console branco com a faixa de luz, e a pilha de jogos do outro lado
+    R(g, 207, 173, 11, 4, '#d6d8dc'); R(g, 207, 173, 11, 1, '#eceef0'); R(g, 207, 177, 11, 2, '#9ea3aa'); R(g, 208, 175, 5, 1, '#7fb2ff');
+    R(g, 209, 177, 1, 1, '#2a2d31'); R(g, 212, 177, 2, 1, '#2a2d31'); R(g, 216, 177, 1, 1, '#2a2d31');
+    for (const [y, c] of [[175, '#2e5a8a'], [173, '#8a2e3a'], [171, '#3a7a4a']] as const) { R(g, 248, y, 9, 2, c); R(g, 248, y, 9, 1, 'rgba(255,255,255,0.18)'); R(g, 256, y, 1, 2, '#e8e1d2'); }
+  }, hooks.tv);
   add(14, 160, 20, 34, 191, (g) => { // espada-de-são-jorge
     R(g, 18, 190, 12, 2, 'rgba(0,0,0,0.3)'); R(g, 19, 183, 10, 8, '#1a1c1f'); R(g, 18, 182, 12, 2, '#2a2d31');
     R(g, 20, 170, 2, 12, '#2c5234'); R(g, 23, 165, 2, 17, '#376640'); R(g, 26, 169, 2, 13, '#2c5234'); R(g, 21, 168, 1, 4, '#9a9a5a'); R(g, 24, 163, 1, 3, '#9a9a5a');
@@ -365,7 +383,11 @@ const TREES: Array<[number, number, number]> = [[20, 62, 70], [50, 48, 80], [84,
   [24, 120, 84], [60, 150, 78], [18, 196, 90], [70, 236, 80], [30, 272, 86], [420, 120, 86], [392, 170, 80], [436, 214, 90], [404, 262, 84], [440, 306, 88], [150, 300, 82], [340, 300, 78], [110, 318, 84]];
 const ROCKS: Array<[number, number, number, number]> = [[176, 262, 9, 5], [300, 244, 7, 4], [96, 290, 10, 6], [364, 236, 8, 5]];
 
-export function buildExterior(L: HouseLayout): HTMLCanvasElement {
+/**
+ * Vista de fora. Com `front`, devolve também um recorte só com o que fica na frente da linha `y`
+ * dentro de `rect`, já pintado: quem anda nessa linha passa atrás dos pinheiros e da cerca.
+ */
+export function buildExterior(L: HouseLayout, front?: { rect: Rect; y: number }): { img: HTMLCanvasElement; front: HTMLCanvasElement | null } {
   const W = L.outW * T, H = L.outH * T, grow = ANNEX_PX * L.wings, houseEnd = 346 + grow;
   // o que fica à direita da casa anda junto quando ela ganha anexos
   const shift = (x: number, y: number) => (x > 340 && y < 320 ? x + grow : x);
@@ -384,22 +406,34 @@ export function buildExterior(L: HouseLayout): HTMLCanvasElement {
   for (let y = 228; y < H; y++) R(g, px(y) - 10, y, 20, 1, '#2f2e28');
   for (let y = 232; y < H; y += 10) { const cx = px(y) + ((y / 10) % 2 ? -2 : 2); ellipse(g, cx, y, 7, 3, '#45494b'); R(g, cx - 5, y - 3, 9, 1, '#5a5f62'); }
 
-  const O: Array<{ y: number; d: () => void }> = [];
-  O.push({ y: 236, d: () => { house(g); for (let k = 0; k < L.wings; k++) annex(g, k); } });
-  for (const [x, y, h] of TREES) O.push({ y, d: () => fir(g, shift(x, y), y, h) });
-  for (const [x, y, w, h] of ROCKS) O.push({ y, d: () => rock(g, shift(x, y), y, w, h) });
-  O.push({ y: 300, d: () => { mossyLog(g, 292, 302, 382, 282); R(g, 330, 286, 2, 1, '#c9b8a0'); R(g, 330, 287, 1, 1, '#8a7a66'); R(g, 352, 281, 2, 1, '#c9b8a0'); R(g, 352, 282, 1, 1, '#8a7a66'); } });
-  for (const b of BOLLARDS) O.push({ y: b.y, d: () => { R(g, b.x - 1, b.y - 8, 3, 8, '#16181b'); R(g, b.x - 2, b.y - 10, 5, 3, '#2a2e33'); R(g, b.x - 1, b.y - 9, 3, 1, '#ffcf85'); } });
+  const O: Array<{ y: number; d: (g: Ctx) => void }> = [];
+  O.push({ y: 236, d: (g) => { house(g); for (let k = 0; k < L.wings; k++) annex(g, k); } });
+  for (const [x, y, h] of TREES) O.push({ y, d: (g) => fir(g, shift(x, y), y, h) });
+  for (const [x, y, w, h] of ROCKS) O.push({ y, d: (g) => rock(g, shift(x, y), y, w, h) });
+  O.push({ y: 300, d: (g) => { mossyLog(g, 292, 302, 382, 282); R(g, 330, 286, 2, 1, '#c9b8a0'); R(g, 330, 287, 1, 1, '#8a7a66'); R(g, 352, 281, 2, 1, '#c9b8a0'); R(g, 352, 282, 1, 1, '#8a7a66'); } });
+  for (const b of BOLLARDS) O.push({ y: b.y, d: (g) => { R(g, b.x - 1, b.y - 8, 3, 8, '#16181b'); R(g, b.x - 2, b.y - 10, 5, 3, '#2a2e33'); R(g, b.x - 1, b.y - 9, 3, 1, '#ffcf85'); } });
   for (let i = 0; i < 80 + grow / 6; i++) {
     const x = Math.floor(r() * W), y = 40 + Math.floor(r() * (H - 40)), s = 0.8 + r() * 0.6;
     if (x > 94 && x < houseEnd && y < 242) continue;
     if (Math.abs(x - px(y)) < 16 && y > 224) continue;
-    O.push({ y, d: () => fern(g, x, y, s) });
+    O.push({ y, d: (g) => fern(g, x, y, s) });
   }
-  O.push({ y: 9999, d: () => { // cercas de madeira nas bordas
+  O.push({ y: 9999, d: (g) => { // cercas de madeira nas bordas
     R(g, 2, 0, 12, H, '#15110e'); R(g, 4, 0, 2, H, '#211a15'); for (let y = 6; y < H; y += 14) R(g, 7, y, 4, 1, '#0d0a08');
     const rx = W - 12; R(g, rx, 0, 10, H, '#15110e'); R(g, rx + 2, 0, 2, H, '#211a15'); for (let y = 12; y < H; y += 16) R(g, rx + 4, y, 4, 1, '#0d0a08');
   } });
-  O.sort((a, b) => a.y - b.y).forEach((o) => o.d());
-  return c;
+  O.sort((a, b) => a.y - b.y).forEach((o) => o.d(g));
+  if (!front) return { img: c, front: null };
+  const { rect } = front, [fc, fg] = mk(rect.w, rect.h);
+  fg.translate(-rect.x, -rect.y);
+  for (const o of O) if (o.y > front.y) o.d(fg);
+  // só fica o que é sólido (sombras não), com a cor que já está na vista
+  const m = fg.getImageData(0, 0, rect.w, rect.h), base = g.getImageData(rect.x, rect.y, rect.w, rect.h);
+  for (let i = 0; i < m.data.length; i += 4) {
+    const solid = m.data[i + 3] >= 200;
+    for (let k = 0; k < 3; k++) m.data[i + k] = base.data[i + k];
+    m.data[i + 3] = solid ? 255 : 0;
+  }
+  fg.putImageData(m, 0, 0);
+  return { img: c, front: fc };
 }

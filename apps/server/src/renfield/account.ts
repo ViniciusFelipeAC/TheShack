@@ -73,7 +73,10 @@ export class Account {
       subscriptionType: info.subscriptionType ?? null,
       credentialSource: source,
       problem,
-      availableModels: models.map((m) => ({ value: m.value, displayName: m.displayName })),
+      availableModels: models.map((m) => ({
+        value: m.value, displayName: m.displayName, description: m.description ?? '',
+        efforts: m.supportedEffortLevels ?? (m.supportsEffort === false ? [] : null),
+      })),
       checkedAt: new Date().toISOString(),
     };
   }

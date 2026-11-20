@@ -42,17 +42,26 @@ export type PairResult = z.infer<typeof PairResult>;
 /* ---------- agentes ---------- */
 const listDefault = <T extends z.ZodType>(item: T) => z.array(item).default([]);
 
+/** Níveis de esforço do Claude Code, do mais rápido ao que pensa mais. */
+export const Effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+export type Effort = z.infer<typeof Effort>;
+
 export const AgentManifest = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'use letras minúsculas, números e hífen'),
   name: z.string().min(1),
   role: z.string().min(1),
   model: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
-  effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
+  effort: Effort.default('medium'),
   persona: z.string().default('persona.md'),
   chat: z.boolean().default(false),
   tools: z.object({ builtin: listDefault(z.string()), shack: listDefault(z.string()) }).default({ builtin: [], shack: [] }),
   workspace: z.enum(['required', 'optional', 'none']).default('none'),
-  permissions: z.object({ autoApprove: listDefault(z.string()), deny: listDefault(z.string()) }).default({ autoApprove: [], deny: [] }),
+  permissions: z.object({
+    /** "allowlist": só os comandos de autoApprove rodam sozinhos. "free": tudo dentro do workspace roda, e só o arriscado pede. */
+    shell: z.enum(['allowlist', 'free']).default('allowlist'),
+    autoApprove: listDefault(z.string()),
+    deny: listDefault(z.string()),
+  }).default({ shell: 'allowlist', autoApprove: [], deny: [] }),
   confirm: listDefault(z.string()),
   limits: z.object({
     concurrency: z.number().int().min(1).max(8).default(1),
@@ -65,12 +74,27 @@ export type AgentManifest = z.infer<typeof AgentManifest>;
 export const AgentStatus = z.enum(['idle', 'working', 'waiting_input', 'error', 'disabled']);
 export type AgentStatus = z.infer<typeof AgentStatus>;
 
+/** Modelo e esforço escolhidos no app, por cima do agent.yaml. Nulo = vale o do arquivo. */
+export const AgentSettings = z.object({ model: z.string().nullable(), effort: Effort.nullable() });
+export type AgentSettings = z.infer<typeof AgentSettings>;
+
+/** Campo ausente fica como está; null volta ao valor do agent.yaml. */
+export const AgentSettingsInput = z.object({
+  model: z.string().trim().min(1).max(80).regex(/^[\w.:[\]-]+$/, 'use o apelido ou o id do modelo').nullable().optional(),
+  effort: Effort.nullable().optional(),
+});
+export type AgentSettingsInput = z.infer<typeof AgentSettingsInput>;
+
 export const AgentInfo = z.object({
   id,
   name: z.string(),
   role: z.string(),
+  /** Modelos do agent.yaml, em ordem de preferência. */
   models: z.array(z.string()),
+  /** Esforço do agent.yaml. */
   effort: z.string(),
+  /** A troca feita no app. O que vale é ela; sem troca, o agent.yaml. */
+  settings: AgentSettings,
   chat: z.boolean(),
   status: AgentStatus,
   activity: z.string().nullable(),
@@ -227,7 +251,7 @@ export const EventType = z.enum([
   'task.created', 'task.updated', 'task.progress', 'task.waiting_input', 'task.done', 'task.failed', 'task.cancelled',
   'approval.requested', 'approval.resolved',
   'chat.message', 'reminder.fired', 'timer.finished', 'calendar.changed', 'notification.created', 'system.quota', 'data.changed',
-  'mode.changed',
+  'mode.changed', 'conversation.changed',
 ]);
 export type EventType = z.infer<typeof EventType>;
 

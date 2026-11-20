@@ -1,5 +1,7 @@
-import type { AccountStatus, AgentInfo, Approval, ChatMessage, ChatStyle, DataEntity, Memory, Mode, Rule, ShackEvent, ShackNotification, Task } from '@shack/shared';
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  AccountStatus, AgentInfo, Approval, ChatMessage, ChatStyle, Conversation, DataEntity, Memory, Mode, Rule, ShackEvent, ShackNotification, Task,
+} from '@shack/shared';
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentPanel } from './AgentPanel.tsx';
 import { Dock, type Section, SECTIONS, TopBar, Welcome, Zoom } from './Hud.tsx';
 import { api, ApiError, type Connection, Live, tokenStore } from './live.ts';
@@ -15,6 +17,7 @@ import { SceneCanvas } from './SceneCanvas.tsx';
 import type { MapName, SceneHandle, Weather } from './scene/engine.ts';
 import { houseOrder } from './scene/model.ts';
 import { Settings } from './Settings.tsx';
+import { Splitter, useChatWidth } from './Splitter.tsx';
 
 const WEATHER_KEY = 'shack.weather';
 const WELCOME_KEY = 'shack.welcome.v1';
@@ -121,6 +124,7 @@ function Login({ onDone }: { onDone(): void }) {
 
 function Shell({ onLogout }: { onLogout(): void }) {
   const [section, setSection] = useState<Section | null>(sectionFromHash);
+  const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streams, setStreams] = useState<Record<string, string>>({});
   const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -145,8 +149,11 @@ function Shell({ onLogout }: { onLogout(): void }) {
   const [welcome, setWelcome] = useState(() => stored(WELCOME_KEY) !== '1');
   const [chatOpen, setChatOpen] = useState(false);
   const [prefill, setPrefill] = useState<{ text: string; n: number } | null>(null);
+  const [chatWidth, setChatWidth] = useChatWidth();
   const live = useRef<Live | null>(null);
   const scene = useRef<SceneHandle | null>(null);
+  // Os eventos chegam por um callback fixo; a conversa aberta fica num ref para ele filtrar as mensagens.
+  const convId = useRef<string | null>(null);
 
   useEffect(() => {
     const onHash = () => setSection(sectionFromHash());
@@ -160,13 +167,29 @@ function Shell({ onLogout }: { onLogout(): void }) {
     setToReview(mems.filter((m) => m.isNew).length + rules.filter((r) => r.isNew).length);
   }, []);
 
+  /** Mostra outra conversa: a que você abriu aqui ou a que outro aparelho abriu. */
+  const showConversation = useCallback(async (c: Conversation) => {
+    setConversation(c);
+    if (convId.current === c.id) return;
+    convId.current = c.id;
+    setMessages([]);
+    setStreams({});
+    const m = await api<ChatMessage[]>(`/conversations/${encodeURIComponent(c.id)}/messages?limit=100`);
+    if (convId.current === c.id) setMessages(m);
+  }, []);
+
   const refresh = useCallback(async () => {
     countReview().catch(() => {});
-    const [m, a, p, acc, n, modes] = await Promise.all([
-      api<ChatMessage[]>('/conversations/main/messages?limit=100'), api<AgentInfo[]>('/agents'), api<Approval[]>('/approvals'),
+    const chat = async () => {
+      const c = await api<Conversation>('/conversations/current');
+      return [c, await api<ChatMessage[]>(`/conversations/${encodeURIComponent(c.id)}/messages?limit=100`)] as const;
+    };
+    const [[c, m], a, p, acc, n, modes] = await Promise.all([
+      chat(), api<AgentInfo[]>('/agents'), api<Approval[]>('/approvals'),
       api<AccountStatus>('/system/account'), api<{ unread: number }>('/notifications?limit=1'), api<Mode[]>('/modes'),
     ]);
-    setMessages(m); setAgents(a); setApprovals(p); setAccount(acc); setUnread(n.unread);
+    convId.current = c.id;
+    setConversation(c); setMessages(m); setAgents(a); setApprovals(p); setAccount(acc); setUnread(n.unread);
     setMode(modes.find((x) => x.active)?.name ?? null);
     setVersions((v) => ({ calendar: v.calendar + 1, reminders: v.reminders + 1, timers: v.timers + 1, lists: v.lists + 1, notes: v.notes + 1 }));
     setTaskVersions((v) => Object.fromEntries(a.map((x) => [x.id, (v[x.id] ?? 0) + 1])));
@@ -181,12 +204,17 @@ function Shell({ onLogout }: { onLogout(): void }) {
     switch (e.type) {
       case 'chat.message': {
         const { message, streamId } = data as { message: ChatMessage; streamId: string | null };
-        setMessages((ms) => (ms.some((m) => m.id === message.id) ? ms : [...ms, message]));
-        if (streamId) setStreams((s) => { const n = { ...s }; delete n[streamId]; return n; });
         // O Renfield pode ter anotado algo nesta resposta.
         if (message.role === 'assistant') countReview().catch(() => {});
+        // Resposta atrasada de uma conversa que você já fechou: fica no histórico dela.
+        if (convId.current && message.conversationId !== convId.current) break;
+        setMessages((ms) => (ms.some((m) => m.id === message.id) ? ms : [...ms, message]));
+        if (streamId) setStreams((s) => { const n = { ...s }; delete n[streamId]; return n; });
         break;
       }
+      case 'conversation.changed':
+        showConversation((data as { current: Conversation }).current).catch(() => {});
+        break;
       case 'agent.status':
         setAgents((as) => as.map((a) => (a.id === e.agentId ? { ...a, ...(data as Partial<AgentInfo>) } : a)));
         break;
@@ -217,13 +245,16 @@ function Shell({ onLogout }: { onLogout(): void }) {
         break;
       }
     }
-  }, [countReview]);
+  }, [countReview, showConversation]);
 
   useEffect(() => {
     const l = new Live({
       onConnection: (c) => { setConnection(c); if (c === 'online') refresh().catch(() => {}); },
       onUnauthorized: onLogout,
-      onDelta: (d) => setStreams((s) => ({ ...s, [d.messageId]: (s[d.messageId] ?? '') + d.text })),
+      onDelta: (d) => {
+        if (convId.current && d.conversationId !== convId.current) return;
+        setStreams((s) => ({ ...s, [d.messageId]: (s[d.messageId] ?? '') + d.text }));
+      },
       onEvent: apply,
     });
     live.current = l;
@@ -232,8 +263,16 @@ function Shell({ onLogout }: { onLogout(): void }) {
   }, [apply, refresh, onLogout]);
 
   const send = (text: string, style: ChatStyle, attachmentIds: string[] = []) => {
-    const sent = live.current?.send({ type: 'chat.send', conversationId: 'main', text, style, attachmentIds, clientId: crypto.randomUUID() });
-    if (!sent) api('/conversations/main/messages', { method: 'POST', body: { text, style, attachmentIds } }).catch(() => {});
+    const id = convId.current ?? undefined;
+    const sent = live.current?.send({ type: 'chat.send', conversationId: id, text, style, attachmentIds, clientId: crypto.randomUUID() });
+    if (!sent) api(`/conversations/${encodeURIComponent(id ?? 'current')}/messages`, { method: 'POST', body: { text, style, attachmentIds } }).catch(() => {});
+  };
+  // O servidor também avisa os outros aparelhos; aqui a troca é na hora, sem esperar o evento.
+  const newConversation = () => {
+    api<Conversation>('/conversations', { method: 'POST', body: {} }).then(showConversation).catch(() => {});
+  };
+  const openConversation = (id: string) => {
+    api<Conversation>('/conversations/current', { method: 'PUT', body: { id } }).then(showConversation).catch(() => {});
   };
   const respond = (id: string, decision: 'approve' | 'deny', answer?: string) => {
     if (!live.current?.send({ type: 'approval.respond', approvalId: id, decision, answer })) {
@@ -281,7 +320,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
   const resetsAt = quota?.resetsAt ? resetText(quota.resetsAt) : null;
 
   return (
-    <div className="house-app">
+    <div className="house-app" style={{ '--chat-w': `${chatWidth}px` } as CSSProperties}>
       <section className="stage" aria-label="A casa">
         <SceneCanvas
           agents={sceneAgents} focusId={focusId} weather={weather} resting={quotaBlocked} handle={scene}
@@ -328,9 +367,12 @@ function Shell({ onLogout }: { onLogout(): void }) {
         {welcome && <Welcome onClose={closeWelcome} />}
       </section>
 
+      <Splitter width={chatWidth} onChange={setChatWidth} />
+
       <ChatPanel
-        messages={messages} streams={streams} agents={agents} approvals={approvals}
+        conversation={conversation} messages={messages} streams={streams} agents={agents} approvals={approvals}
         open={chatOpen} onOpenChange={setChatOpen} prefill={prefill} onSend={send} onRespond={respond} onBoard={() => go('quadro')}
+        onNewConversation={newConversation} onOpenConversation={openConversation}
       />
 
       <Toasts items={toasts} onClose={closeToast} onOpenTask={openTask} />

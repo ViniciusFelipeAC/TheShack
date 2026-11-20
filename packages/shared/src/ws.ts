@@ -8,7 +8,8 @@ export const ClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('subscribe'), since: z.number().int().min(0).optional() }),
   z.object({
     type: z.literal('chat.send'),
-    conversationId: z.string().default('main'),
+    /** Sem id, vai para a conversa aberta. */
+    conversationId: z.string().optional(),
     text: z.string().max(20_000).default(''),
     style: z.enum(['normal', 'short', 'voice']).optional(),
     /** Anexos já enviados por POST /attachments. Texto vazio vale quando há anexo. */

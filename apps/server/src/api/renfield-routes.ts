@@ -1,7 +1,7 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi';
 import {
   AccountStatus, ActiveModeInput, Attachment, ATTACHMENT_LIMITS, ChatMessage, Conversation, FeedbackInput, Memory, MemoryInput, MemoryPatch,
-  Mode, ModeInput, Rule, RuleInput, RulePatch, SendMessageInput, SendMessageResult,
+  Mode, ModeInput, OpenConversationInput, Rule, RuleInput, RulePatch, SendMessageInput, SendMessageResult,
 } from '@shack/shared';
 import { bodyLimit } from 'hono/body-limit';
 import type { Shack } from '../shack.ts';
@@ -53,18 +53,30 @@ export function registerRenfieldRoutes(api: OpenAPIHono<Env>, shack: Shack) {
 
   /* ---------- conversa ---------- */
   api.openapi(createRoute({
-    method: 'get', path: '/conversations', tags: ['Chat'], summary: 'Lista as conversas com o Renfield. A principal tem id "main".',
+    method: 'get', path: '/conversations', tags: ['Chat'], summary: 'Lista as conversas com o Renfield, da mais recente para a mais antiga. A primeira tem id "main".',
     responses: { 200: { ...J(z.array(Conversation)), description: 'Conversas' }, 401: ERRORS[401] },
   }), (c) => c.json(chat.conversations(), 200));
 
   api.openapi(createRoute({
-    method: 'post', path: '/conversations', tags: ['Chat'], summary: 'Abre uma conversa nova',
+    method: 'post', path: '/conversations', tags: ['Chat'],
+    summary: 'Abre uma conversa nova e limpa, que passa a ser a aberta em todos os aparelhos',
     request: { body: J(z.object({ title: z.string().trim().min(1).max(120).default('Nova conversa') })) },
     responses: { 201: { ...J(Conversation), description: 'Conversa' }, 400: ERRORS[400], 401: ERRORS[401] },
-  }), (c) => c.json(chat.createConversation(c.req.valid('json').title), 201));
+  }), (c) => c.json(chat.startConversation(c.req.valid('json').title), 201));
 
   api.openapi(createRoute({
-    method: 'get', path: '/conversations/{id}/messages', tags: ['Chat'], summary: 'Mensagens da conversa, em ordem cronológica',
+    method: 'get', path: '/conversations/current', tags: ['Chat'], summary: 'A conversa aberta no app',
+    responses: { 200: { ...J(Conversation), description: 'Conversa' }, 401: ERRORS[401] },
+  }), (c) => c.json(chat.current(), 200));
+
+  api.openapi(createRoute({
+    method: 'put', path: '/conversations/current', tags: ['Chat'], summary: 'Abre uma conversa do histórico em todos os aparelhos',
+    request: { body: J(OpenConversationInput) },
+    responses: { 200: { ...J(Conversation), description: 'Conversa' }, 400: ERRORS[400], 401: ERRORS[401], 404: ERRORS[404] },
+  }), (c) => c.json(chat.open(c.req.valid('json').id), 200));
+
+  api.openapi(createRoute({
+    method: 'get', path: '/conversations/{id}/messages', tags: ['Chat'], summary: 'Mensagens da conversa, em ordem cronológica. O id "current" é a conversa aberta.',
     request: { params: IdParam, query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50), before: z.string().optional() }) },
     responses: { 200: { ...J(z.array(ChatMessage)), description: 'Mensagens' }, 401: ERRORS[401], 404: ERRORS[404] },
   }), (c) => {
@@ -82,9 +94,9 @@ export function registerRenfieldRoutes(api: OpenAPIHono<Env>, shack: Shack) {
       400: ERRORS[400], 401: ERRORS[401], 404: ERRORS[404],
     },
   }), async (c) => {
-    const { id } = c.req.valid('param');
     const body = c.req.valid('json');
-    const r = chat.send(id, body.text, body.style, c.get('device').id, body.attachmentIds);
+    const r = chat.send(c.req.valid('param').id, body.text, body.style, c.get('device').id, body.attachmentIds);
+    const id = r.message.conversationId;
     if (c.req.valid('query').wait === 'true' && r.reply) return c.json({ conversationId: id, message: r.message, reply: await r.reply }, 200);
     return c.json({ conversationId: id, message: r.message, reply: null }, 202);
   });
@@ -94,8 +106,8 @@ export function registerRenfieldRoutes(api: OpenAPIHono<Env>, shack: Shack) {
     request: { body: J(FeedbackInput) },
     responses: { 202: { ...J(SendMessageResult), description: 'Feedback entregue ao Renfield' }, 400: ERRORS[400], 401: ERRORS[401] },
   }), (c) => {
-    const r = chat.send('main', `/feedback ${c.req.valid('json').text}`, 'normal', c.get('device').id);
-    return c.json({ conversationId: 'main', message: r.message, reply: null }, 202);
+    const r = chat.send('current', `/feedback ${c.req.valid('json').text}`, 'normal', c.get('device').id);
+    return c.json({ conversationId: r.message.conversationId, message: r.message, reply: null }, 202);
   });
 
   /* ---------- memórias ---------- */

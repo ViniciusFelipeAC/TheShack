@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Effort } from './schemas.ts';
 
 /* ---------- conversa ---------- */
 export const ChatStyle = z.enum(['normal', 'short', 'voice']);
@@ -8,10 +9,16 @@ export const Conversation = z.object({
   id: z.string(),
   agentId: z.string(),
   title: z.string(),
+  /** Começo da primeira mensagem sua, para achar a conversa no histórico. Nulo sem mensagem de texto. */
+  preview: z.string().nullable(),
+  messageCount: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type Conversation = z.infer<typeof Conversation>;
+
+/** Troca a conversa aberta. `id` também aceita "current" nas rotas de mensagens. */
+export const OpenConversationInput = z.object({ id: z.string().min(1) });
 
 export const MessageKind = z.enum(['text', 'task_notice', 'error']);
 export type MessageKind = z.infer<typeof MessageKind>;
@@ -175,7 +182,13 @@ export const AccountStatus = z.object({
   subscriptionType: z.string().nullable(),
   credentialSource: z.string().nullable(),
   problem: z.string().nullable(),
-  availableModels: z.array(z.object({ value: z.string(), displayName: z.string() })),
+  /**
+   * `description`: a legenda do Claude Code, a mesma do seletor do VS Code, em inglês.
+   * `efforts`: níveis que o modelo aceita. Vazio = o modelo não usa esforço; nulo = o SDK não disse.
+   */
+  availableModels: z.array(z.object({
+    value: z.string(), displayName: z.string(), description: z.string(), efforts: z.array(Effort).nullable(),
+  })),
   agentModels: z.record(z.string(), z.string().nullable()),
   quota: QuotaStatus.nullable(),
   checkedAt: z.string().nullable(),

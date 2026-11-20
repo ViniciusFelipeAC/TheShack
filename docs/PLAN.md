@@ -331,8 +331,8 @@ interface Approval {
   2. Regras `deny` do manifesto (por exemplo, `git push`) valem em qualquer modo.
   3. O modo `acceptEdits` aprova sozinho edições dentro do workspace.
   4. Comandos da allowlist passam sem perguntar.
-  5. O resto vai para o `canUseTool`, vira aprovação e a tarefa entra em `waiting_input`.
-- **Sem sandbox:** no Windows nativo, o Claude Code não tem sandbox de sistema (ela só existe no WSL 2). O hook reduz o risco, mas um comando de shell ainda pode mexer fora do workspace. Por isso o padrão proposto pede aprovação para todo comando fora da allowlist. Veja a pergunta 3 na seção 15.
+  5. O resto vai para o `canUseTool`. Com `permissions.shell: free`, o shell que não é arriscado passa ali mesmo (`shellRisk` em `agents/guard.ts`). O que sobra vira aprovação, e a tarefa entra em `waiting_input`.
+- **Sem sandbox:** no Windows nativo, o Claude Code não tem sandbox de sistema (ela só existe no WSL 2). O hook reduz o risco, mas um comando de shell ainda pode mexer fora do workspace. Por isso o padrão proposto pedia aprovação para todo comando fora da allowlist. Veja a pergunta 3 na seção 15. Em 2026-11-09, o etnaD passou para o modo livre: as aprovações paravam as tarefas, e 12 dos 13 comandos pedidos até ali eram trabalho comum dentro do workspace. As regras de risco são por texto e não substituem uma sandbox.
 - **Git:** se o workspace é um repositório, o etnaD trabalha num branch `etnad/<slug-da-tarefa>`, faz commit no fim e nunca dá push sem você pedir. Isso é configurável por workspace.
 - **Progresso:** as mensagens do SDK viram `task.progress` ("Lendo src/x.ts", "Rodando testes"), com no máximo um evento a cada 500 ms por tarefa.
 - **Relatório:** saída estruturada do SDK no formato `TaskResult` (o que mudou, onde, como testar), mais os tokens consumidos e um resumo do diff.
@@ -381,8 +381,10 @@ interface Approval {
   - parede de cima de vidro, com a floresta ao fundo;
   - piso de nogueira;
   - estação do Renfield (mesa de madeira, um monitor, luminária) e estação do etnaD (mesa preta, dois monitores, teclado com luz);
-  - ilha com cafeteira, figueira, estante, costela-de-adão, sofá de veludo verde, lareira de aço e plantas.
+  - ilha com cafeteira, figueira, estante, costela-de-adão, sofá de veludo verde, lareira de aço e plantas;
+  - no pé do tapete do sofá, um rack com TV e videogame. A tela fica virada para o sofá, e a luz dela muda de cor como num jogo.
 - **Exterior:** a casa de dois andares, com varandas, escada e caminho de pedras, entre pinheiros, samambaias, pedras e um tronco com musgo.
+  - De vez em quando, um lobo ruivo enorme sai da mata à esquerda, senta e fica olhando a casa (homenagem ao Jacob, de Crepúsculo). À noite os olhos brilham e ele uiva; tocar nele faz ele uivar e fugir.
 - **Profundidade:** desenhada em camadas, nesta ordem:
   1. chão e paredes;
   2. móveis e personagens, ordenados por Y;
@@ -422,6 +424,8 @@ interface Approval {
 ### Técnica
 
 - Canvas 2D puro, sem bibliotecas, em `apps/web/src/scene/`. A arte é toda original e feita em código.
+- **Arquivos:** `engine.ts` (laço, câmera e fronteira com o React), `walker.ts` (agentes), `characters.ts` (sprites), `art.ts` (arte fixa), `animated.ts` (telas, fogo e TV), `light.ts`, `sky.ts`, `input.ts` e `wolf.ts`.
+- **Personagens:** quadros de 24x40 com três tons por cor (luz de cima e da esquerda) e contorno de 1 pixel na cor do vizinho escurecida.
 - **Arte estática:** chão, paredes, móveis e o exterior são desenhados uma vez em canvases fora da tela. A cada quadro só mudam as telas, o fogo, a luz, a neblina e as partículas.
 - **Animação:** os sprites animam a cerca de 10 fps, e a câmera e a luz a 60 fps. Tudo pausa com a aba oculta e respeita "reduzir movimento".
 - **Fronteira com o React:** ele passa o estado real dos agentes (`setAgents`), o foco, o clima e a cota. O motor devolve o texto do que cada um faz na cena, como "Tomando um café".
@@ -706,6 +710,7 @@ O Renfield e o etnaD gastam a mesma cota que você usa no Claude Code e no claud
 - **Protótipo visual:** feito antes da Fase 2, em `prototype/shack-topdown.html`.
 - **Onde roda:** neste PC. O celular entra depois, via Tailscale.
 - **Autonomia do etnaD:** opção (a). Edições no workspace e comandos da allowlist passam sozinhos, e o resto pede aprovação.
+  - **Mudou em 2026-11-09:** opção (b), com proteções. O shell roda livre dentro do workspace, e só o arriscado pede aprovação. O etnaD também passou a decidir sozinho as dúvidas de caminho e a registrá-las nas notas. Para voltar, use `shell: allowlist` no `agent.yaml`.
 - **Pré-requisitos:** Node 24.20 e Git 2.55 instalados.
 
 As perguntas originais ficam abaixo como registro.

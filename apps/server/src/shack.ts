@@ -8,6 +8,7 @@ import { Reminders } from './assistant/reminders.ts';
 import { Scheduler, Timers } from './assistant/timers.ts';
 import { Auth } from './auth/tokens.ts';
 import { type Config, ROOT } from './config.ts';
+import { AgentSettingsStore } from './core/agent-settings.ts';
 import { Approvals } from './core/approvals.ts';
 import { EventBus } from './core/events.ts';
 import { type AgentDef, Registry } from './core/registry.ts';
@@ -31,6 +32,7 @@ export type Shack = {
   db: Db;
   bus: EventBus;
   registry: Registry;
+  agentSettings: AgentSettingsStore;
   approvals: Approvals;
   tasks: TaskBus;
   workspaces: Workspaces;
@@ -68,6 +70,7 @@ export function createShack(config: Config, opts: ShackOptions = {}): Shack {
   const bus = new EventBus(db, eventsRepo(db));
   const registry = new Registry(config.agentsDir, bus);
   registry.load({ silent: true });
+  const agentSettings = new AgentSettingsStore(db, bus);
   const clock = opts.clock ?? (() => new Date());
   const tz = config.timezone;
 
@@ -83,7 +86,7 @@ export function createShack(config: Config, opts: ShackOptions = {}): Shack {
     return config.runner === 'simulated' ? simulated : code;
   };
   const tasks = new TaskBus({
-    db, repo: tasksRepo(db), bus, approvals, registry, runnerFor,
+    db, repo: tasksRepo(db), bus, approvals, registry, runnerFor, agentSettings,
     workspaceExists: (id) => workspaces.get(id) !== null,
     progressThrottleMs: opts.progressThrottleMs,
   });
@@ -116,7 +119,7 @@ export function createShack(config: Config, opts: ShackOptions = {}): Shack {
     workDir: resolve(ROOT, 'data', 'agents', 'renfield'),
     sessionStore: { get: (id) => conversations.sessionId(id), set: (id, s) => conversations.setSessionId(id, s) },
   });
-  const chat = new ChatService({ repo: conversations, bus, tasks, registry, approvals, mind, workspaces, engine, timezone: tz, attachments });
+  const chat = new ChatService({ repo: conversations, bus, tasks, registry, approvals, mind, workspaces, engine, timezone: tz, attachments, agentSettings });
 
   bus.subscribe((e) => {
     // Manifesto mudou (por exemplo, a concorrência): tenta despachar de novo.
@@ -140,7 +143,7 @@ export function createShack(config: Config, opts: ShackOptions = {}): Shack {
   if (opts.startScheduler !== false) scheduler.start();
 
   return {
-    config, db, bus, registry, approvals, tasks, workspaces, auth, mind, account, chat, attachments,
+    config, db, bus, registry, agentSettings, approvals, tasks, workspaces, auth, mind, account, chat, attachments,
     calendar, reminders, timers, lists, notes, notifier, push, scheduler,
     close() { scheduler.stop(); engine.reset(); tasks.shutdown(); db.close(); },
   };

@@ -90,3 +90,14 @@ test('preferências de ócio do manifesto viram lugares da casa', () => {
   assert.deepEqual(idleKinds({ idle: ['tea', 'sofa-read', 'fireplace', 'voar'] }), ['coffee', 'sofa', 'fire']);
   assert.deepEqual(idleKinds({}), []);
 });
+
+test('o rack da TV ocupa o pé do tapete sem fechar o caminho até o sofá e a lareira', () => {
+  const L = planHouse([{ id: 'renfield', kind: 'single' }, { id: 'etnad', kind: 'dual' }]);
+  for (const x of [13, 14, 15]) assert.ok(L.blocked[11][x], `tile ${x},11 é do rack`);
+  for (const id of ['sofa', 'sofa2', 'fire']) {
+    const p = L.pois.find((q) => q.id === id)!;
+    assert.ok(reachable(L.blocked, DOOR, p.tile), `${id} continua alcançável da porta`);
+  }
+  // quem levanta do sofá fica entre o sofá e a TV
+  for (const x of [13, 14]) assert.equal(L.blocked[10][x], false);
+});

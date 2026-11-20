@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Approval, Attachment, ChatMessage, ChatStyle, Conversation, Decision, Task } from '@shack/shared';
+import type { AgentSettingsStore } from '../core/agent-settings.ts';
 import type { Approvals } from '../core/approvals.ts';
 import type { EventBus } from '../core/events.ts';
 import type { Registry } from '../core/registry.ts';
@@ -21,7 +22,7 @@ export type SendResult = { message: ChatMessage; reply: Promise<ChatMessage> | n
 
 export type ChatServiceOptions = {
   repo: ChatRepo; bus: EventBus; tasks: TaskBus; registry: Registry; approvals: Approvals; mind: Mind; workspaces: Workspaces;
-  engine: ChatEngine; timezone: string; attachments: Attachments;
+  engine: ChatEngine; timezone: string; attachments: Attachments; agentSettings: AgentSettingsStore;
 };
 
 /** Conversa com o Renfield: histórico, fila por conversa, streaming e avisos de tarefas. */
@@ -45,21 +46,43 @@ export class ChatService {
 
   conversations(): Conversation[] { return this.#o.repo.list(); }
 
+  /** "current" vale como id da conversa aberta: atalhos do celular mandam para onde você está. */
   conversation(id: string): Conversation {
-    const c = this.#o.repo.get(id);
+    const c = this.#o.repo.get(id === 'current' ? this.#o.repo.currentId() : id);
     if (!c) throw notFound('Conversa');
     return c;
   }
 
-  createConversation(title: string): Conversation { return this.#o.repo.create(this.agentId, title); }
+  /** A conversa aberta. Fica no servidor para todos os aparelhos mostrarem a mesma. */
+  current(): Conversation { return this.conversation('current'); }
 
-  messages(conversationId: string, limit: number, before?: string): ChatMessage[] {
-    this.conversation(conversationId);
-    return this.#o.repo.messages(conversationId, limit, before);
+  /**
+   * Conversa nova e limpa, como o /clear do Claude Code. O Renfield começa sem o que foi dito antes,
+   * mas continua com as memórias, as regras e o estado da casa, que vão em toda mensagem.
+   */
+  startConversation(title = 'Nova conversa'): Conversation {
+    return this.open(this.#o.repo.create(this.agentId, title).id);
   }
 
-  send(conversationId: string, text: string, style: ChatStyle, deviceId: string | null, attachmentIds: string[] = []): SendResult {
-    const conv = this.conversation(conversationId);
+  /** Abre uma conversa do histórico. Os outros aparelhos trocam junto. */
+  open(id: string): Conversation {
+    const next = this.conversation(id);
+    const prev = this.#o.repo.currentId();
+    this.#o.repo.setCurrentId(next.id);
+    // Só a conversa aberta mantém o Claude Code vivo. A anterior fecha depois da resposta em curso
+    // e retoma a sessão salva se você voltar a ela. Se ficou vazia, nem entra no histórico.
+    if (prev !== next.id && !this.#o.repo.dropIfEmpty(prev)) void this.#enqueue(prev, async () => this.#o.engine.reset(prev));
+    this.#o.bus.publish('conversation.changed', { current: next }, { agentId: this.agentId });
+    return next;
+  }
+
+  messages(conversationId: string, limit: number, before?: string): ChatMessage[] {
+    return this.#o.repo.messages(this.conversation(conversationId).id, limit, before);
+  }
+
+  send(id: string, text: string, style: ChatStyle, deviceId: string | null, attachmentIds: string[] = []): SendResult {
+    const conv = this.conversation(id);
+    const conversationId = conv.id;
     text = text.trim();
     const attached = attachmentIds.length ? this.#o.attachments.check(attachmentIds) : [];
     if (!text && !attached.length) throw badRequest('Escreva uma mensagem ou anexe um arquivo.');
@@ -98,8 +121,10 @@ export class ChatService {
   async #turn(conv: Conversation, text: string, style: ChatStyle, attached: Attachment[] = []): Promise<ChatMessage> {
     const { registry, tasks, mind, approvals, engine, timezone } = this.#o;
     const base = { conversationId: conv.id, role: 'assistant' as const, style, taskId: null, deviceId: null };
-    const def = registry.get(this.agentId);
-    if (!def?.manifest) return this.#add({ ...base, kind: 'error', text: `O Renfield está desativado: ${def?.error ?? 'a pasta agents/renfield não existe.'}` });
+    const found = registry.get(this.agentId);
+    if (!found?.manifest) return this.#add({ ...base, kind: 'error', text: `O Renfield está desativado: ${found?.error ?? 'a pasta agents/renfield não existe.'}` });
+    // Com o modelo ou o esforço trocado no app, o motor reabre a sessão retomando a conversa.
+    const def = this.#o.agentSettings.apply(found);
 
     const streamId = randomUUID();
     tasks.setChatActivity(this.agentId, 'Respondendo você');
@@ -111,7 +136,7 @@ export class ChatService {
         conversationId: conv.id,
         text: text || '(Mensagem só com anexos.)',
         attachments: this.#files(attached),
-        manifest: def.manifest,
+        manifest: def.manifest!,
         systemPrompt: buildSystemPrompt({ persona: def.persona, agents, memories: mind.memories(), rules: mind.rules(), modes: mind.modes() }),
         context: buildContext({
           timezone, style, activeMode: mind.activeMode(), agents, approvals: approvals.pending(), workspaces: this.#o.workspaces.list(),
@@ -136,7 +161,9 @@ export class ChatService {
   #notice(type: 'task.done' | 'task.failed' | 'task.waiting_input', task: Task): void {
     if (task.assignee === this.agentId) return;
     const name = this.#o.registry.get(task.assignee)?.manifest?.name ?? task.assignee;
-    const conversationId = task.origin.conversationId && this.#o.repo.get(task.origin.conversationId) ? task.origin.conversationId : 'main';
+    // O aviso vai para a conversa aberta, onde você está olhando, mesmo que o pedido tenha nascido em outra.
+    // Ele é escrito pelo servidor e não entra na sessão do Renfield, então nada se perde.
+    const conversationId = this.#o.repo.currentId();
     let text: string;
     if (type === 'task.done') {
       const r = task.result;

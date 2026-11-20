@@ -61,11 +61,12 @@ O etnaD só trabalha dentro de pastas cadastradas como workspace.
   - A raiz do disco e a pasta da própria Shack são recusadas.
 - **Gestão:** `GET /workspaces` lista os cadastros. `PATCH /workspaces/{id}` muda o nome, os comandos liberados e o uso de branch. `DELETE /workspaces/{id}` remove o cadastro, mas não apaga a pasta.
 - **Tarefa:** `POST /tasks` para o `etnad` exige `workspaceId`. Sem ele, a resposta é `workspace_required`; com um id que não existe, `unknown_workspace`.
-- **O que fica livre e o que pede aprovação:**
+- **O que fica livre e o que pede aprovação:** depende de `permissions.shell` no manifesto.
   - Edições dentro do workspace passam sozinhas.
   - Comandos da lista do manifesto e do workspace (`autoApprove`) passam sozinhos.
   - Comandos que só leem informação também passam sozinhos, por decisão do próprio Claude Code.
-  - Qualquer outro comando vira um pedido de aprovação, e a tarefa fica em `waiting_input`.
+  - Com `shell: free`, o padrão do etnaD desde 2026-11-09, os outros comandos de shell também passam sozinhos, exceto os arriscados. Arriscado é git que muda branch ou commit, credenciais, encerrar processos, configurações do sistema, instalação global, rede fora da máquina, apagar o workspace em massa e caminhos fora dele. Esses pedem aprovação, e o cartão diz o motivo.
+  - Com `shell: allowlist`, qualquer outro comando vira um pedido de aprovação, e a tarefa fica em `waiting_input`.
 - **Proteção:** caminhos fora do workspace são bloqueados por um hook, em qualquer modo, e o bloqueio aparece nas notas do relatório.
 - **Git:** se o workspace for um repositório e `gitBranching` estiver ligado, cada tarefa trabalha no branch `etnad/<título>-<id>`.
   - No fim, as mudanças viram um commit nesse branch, e o seu branch volta como estava.
@@ -113,7 +114,14 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
 
 ## Chat com o Renfield
 
-- **Conversa principal:** tem o id `main` e é contínua, no estilo Alexa. Outras conversas podem ser criadas com `POST /conversations`.
+- **Conversa aberta:** o servidor guarda qual conversa está aberta, e todos os aparelhos mostram a mesma. Sem escolha, é a primeira, de id `main`.
+  - `GET /conversations/current` devolve a aberta. Nas rotas de mensagens, o id `current` vale como o dela, por exemplo `POST /conversations/current/messages`.
+  - `POST /conversations` abre uma conversa nova e limpa, como o `/clear` do Claude Code, e ela passa a ser a aberta. O Renfield começa sem o que foi dito antes, mas continua com as memórias, as regras e o estado da casa.
+  - `PUT /conversations/current` com `{ "id" }` volta a uma conversa do histórico. Ela retoma a própria sessão do Claude Code.
+  - `GET /conversations` lista da mais recente para a mais antiga. Cada uma traz `preview` (o começo da sua primeira mensagem) e `messageCount`.
+  - Uma conversa nova que você deixa sem nenhuma mensagem é apagada quando outra é aberta.
+  - Só a conversa aberta mantém o processo do Claude Code vivo. A anterior fecha depois da resposta em curso.
+  - Avisos de tarefa e o `POST /feedback` vão para a conversa aberta.
 - **Mandar mensagem:** `POST /conversations/{id}/messages` com `{ "text", "style", "attachmentIds"? }`, em que `style` é `normal`, `short` ou `voice`. Texto vazio vale quando há anexo. Duas formas de receber a resposta:
   - Sem parâmetro, responde 202 na hora, e a resposta chega pelo WebSocket.
   - Com `?wait=true`, a resposta vem no próprio corpo. É o jeito mais simples para atalhos e voz.
@@ -154,6 +162,26 @@ Fotos, PDFs e arquivos de texto vão ao Renfield junto com a mensagem, em dois p
 | `GET/POST /rules`, `PATCH/DELETE /rules/{id}` | Regras aprendidas, com gatilho opcional. `enabled` liga e desliga |
 | `GET/POST /modes`, `PUT /settings/mode` | Modos e o modo ativo (`{ "name": "foco" }` ou `{ "name": null }`) |
 | `GET /agents/renfield/persona`, `PUT /agents/renfield/persona` | O `persona.md`. Vale a partir da próxima mensagem |
+| `PUT /agents/{id}/settings` | Troca o modelo e o esforço de qualquer agente, como o `/model` e o `/effort` do Claude Code. Veja abaixo |
+
+### Modelo e esforço
+
+`PUT /agents/{id}/settings` com `{ "model"?, "effort"? }` grava a troca no banco, por cima do `agent.yaml`, que não muda.
+
+- **Campos:** campo ausente fica como está; `null` volta ao valor do arquivo.
+- **Valores:** `model` é um apelido do seu plano (`opus`, `sonnet`, `haiku`…). `effort` é `low`, `medium`, `high`, `xhigh` ou `max`.
+- **Quando vale:**
+  - Para o Renfield, a partir da próxima mensagem. A sessão reabre retomando a conversa.
+  - Para o etnaD, a partir da próxima tarefa. A que já está rodando segue como começou.
+- **Reserva:** o modelo escolhido vai na frente da lista do manifesto, e o resto da lista fica de reserva.
+- **Plano:** depois da primeira conversa, um modelo fora do seu plano é recusado com `400`.
+- **Resposta:** o agente, com `settings: { model, effort }` (a troca) e `models` e `effort` (o que diz o arquivo). O evento `agent.updated` com `change: "settings"` avisa os outros aparelhos.
+
+Em `GET /system/account`, cada item de `availableModels` traz:
+
+- `displayName`: o nome com a versão, por exemplo "Opus 5.5".
+- `description`: a legenda que o Claude Code manda, a mesma do seletor do VS Code, em inglês. O app traduz as frases conhecidas e tira o preço por token, que só aparece sem login de assinatura.
+- `efforts`: os níveis que o modelo aceita. Vazio quer dizer que ele não usa esforço; `null` quer dizer que o SDK não informou.
 
 ### Conta e custo
 
@@ -189,11 +217,12 @@ O `seq` cresce sempre e serve para replay. Os eventos ficam guardados por 30 dia
 | Tipo | `data` |
 |---|---|
 | `agent.status` | `{ status, activity, currentTaskId }` |
-| `agent.updated` | `{ change: "added" \| "changed" \| "removed", error }` |
+| `agent.updated` | `{ change: "added" \| "changed" \| "removed" \| "settings", error }`. `settings` é a troca de modelo ou esforço pelo app |
 | `task.created`, `task.updated`, `task.waiting_input`, `task.done`, `task.failed`, `task.cancelled` | a tarefa completa |
 | `task.progress` | `{ message, … }` |
 | `approval.requested`, `approval.resolved` | a aprovação completa |
 | `chat.message` | `{ message, streamId }`. O `streamId` liga a mensagem final aos pedaços `chat.delta` que vieram antes |
+| `conversation.changed` | `{ current }`: um aparelho abriu uma conversa nova ou voltou a outra, e os demais trocam junto |
 | `system.quota` | O mesmo objeto `quota` de `/system/account`, quando o estado muda, a cobrança extra aparece ou o uso anda 5 pontos |
 | `notification.created` | a notificação completa |
 | `reminder.fired`, `timer.finished` | `{ id, text ou label, … }` |
@@ -217,6 +246,6 @@ Todas as mensagens são JSON, nos dois sentidos.
 |---|---|
 | `{ "type": "approval.respond", "approvalId", "decision": "approve" \| "deny", "answer"? }` | nada, ou `error`. O resultado chega como evento `approval.resolved` |
 | `{ "type": "ping" }` | `{ "type": "pong" }` |
-| `{ "type": "chat.send", "conversationId"?, "text", "style"?, "attachmentIds"?, "clientId" }` | a sua mensagem e a do Renfield chegam como eventos `chat.message`. Enquanto ele escreve, chegam `{ "type": "chat.delta", "conversationId", "messageId", "text" }` com os pedaços do texto. `conversationId` padrão: `main` |
+| `{ "type": "chat.send", "conversationId"?, "text", "style"?, "attachmentIds"?, "clientId" }` | a sua mensagem e a do Renfield chegam como eventos `chat.message`. Enquanto ele escreve, chegam `{ "type": "chat.delta", "conversationId", "messageId", "text" }` com os pedaços do texto. Sem `conversationId`, vai para a conversa aberta |
 
 Erros chegam como `{ "type": "error", "code", "message" }` e não fecham a conexão.
