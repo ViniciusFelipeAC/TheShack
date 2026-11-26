@@ -132,7 +132,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
   const [account, setAccount] = useState<AccountStatus | null>(null);
   const [mode, setMode] = useState<string | null>(null);
   const [connection, setConnection] = useState<Connection>('connecting');
-  const [versions, setVersions] = useState<Record<DataEntity, number>>({ calendar: 0, reminders: 0, timers: 0, lists: 0, notes: 0 });
+  const [versions, setVersions] = useState<Record<DataEntity, number>>({ calendar: 0, reminders: 0, timers: 0, lists: 0, notes: 0, habits: 0 });
   const [taskVersions, setTaskVersions] = useState<Record<string, number>>({});
   const [toasts, setToasts] = useState<ShackNotification[]>([]);
   const [unread, setUnread] = useState(0);
@@ -191,7 +191,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
     convId.current = c.id;
     setConversation(c); setMessages(m); setAgents(a); setApprovals(p); setAccount(acc); setUnread(n.unread);
     setMode(modes.find((x) => x.active)?.name ?? null);
-    setVersions((v) => ({ calendar: v.calendar + 1, reminders: v.reminders + 1, timers: v.timers + 1, lists: v.lists + 1, notes: v.notes + 1 }));
+    setVersions((v) => ({ calendar: v.calendar + 1, reminders: v.reminders + 1, timers: v.timers + 1, lists: v.lists + 1, notes: v.notes + 1, habits: v.habits + 1 }));
     setTaskVersions((v) => Object.fromEntries(a.map((x) => [x.id, (v[x.id] ?? 0) + 1])));
   }, [countReview]);
 
@@ -296,6 +296,20 @@ function Shell({ onLogout }: { onLogout(): void }) {
   const closeWelcome = () => { store(WELCOME_KEY, '1'); setWelcome(false); };
   const changeWeather = (w: Weather) => { store(WEATHER_KEY, w); setWeather(w); };
 
+  /** O uso do plano (o /usage do Claude Code). Sem isso, o medidor só sabia da cota depois que algum agente rodava. */
+  const refreshUsage = useCallback(
+    () => api<AccountStatus>('/system/usage/refresh', { method: 'POST' }).then(setAccount).catch(() => {}),
+    [],
+  );
+  // Consulta ao abrir, ao voltar para o app e a cada 5 minutos enquanto ele está à vista. Com a tela apagada, nada.
+  useEffect(() => {
+    void refreshUsage();
+    const onVisible = () => { if (!document.hidden) void refreshUsage(); };
+    const id = setInterval(onVisible, 5 * 60_000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+  }, [refreshUsage]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || bellOpen || settingsOpen) return;
@@ -309,10 +323,13 @@ function Shell({ onLogout }: { onLogout(): void }) {
 
   const ordered = useMemo(() => houseOrder(agents), [agents]);
   const sceneAgents = useMemo(
-    () => agents.map(({ id, name, status, currentTaskId, chat, appearance }) => ({ id, name, status, currentTaskId, chat, appearance })),
+    () => agents.map(({ id, name, status, currentTaskId, currentTaskKind, chat, appearance }) => ({ id, name, status, currentTaskId, currentTaskKind, chat, appearance })),
     [agents],
   );
   const focused = agents.find((a) => a.id === focusId) ?? null;
+  // O painel de quem programa também acompanha a Mina: as conferências das entregas dele rodam na fila dela.
+  const panelVersion = !focused ? 0 : (taskVersions[focused.id] ?? 0)
+    + (focused.runner === 'code' ? agents.filter((x) => x.runner === 'text').reduce((n, x) => n + (taskVersions[x.id] ?? 0), 0) : 0);
   const butler = agents.find((a) => a.chat) ?? null;
   const lastReply = useMemo(() => [...messages].reverse().find((m) => m.role === 'assistant' && m.kind !== 'task_notice') ?? null, [messages]);
   const quota = account?.quota ?? null;
@@ -327,7 +344,8 @@ function Shell({ onLogout }: { onLogout(): void }) {
           onSelect={select} onMap={setMapName} onActivity={setSceneActivity}
         />
         <TopBar
-          connection={connection} mode={mode} weather={weather} map={mapName} unread={unread} quota={quota} toReview={toReview}
+          connection={connection} mode={mode} weather={weather} map={mapName} unread={unread} toReview={toReview}
+          account={account} agents={agents} onUsageRefresh={refreshUsage}
           onToggleMap={() => scene.current?.toggleMap()} onBell={() => setBellOpen(true)} onSection={go}
           onWeather={changeWeather} onSettings={() => setSettingsOpen(true)} onHelp={() => setWelcome(true)} onLogout={onLogout}
         />
@@ -344,14 +362,14 @@ function Shell({ onLogout }: { onLogout(): void }) {
         {focused && (
           <AgentPanel
             agent={focused} agents={agents} sceneActivity={sceneActivity[focused.id] ?? null} approvals={approvals} account={account}
-            version={taskVersions[focused.id] ?? 0} onRespond={respond} onAsk={ask} onClose={() => setFocusId(null)}
+            version={panelVersion} onRespond={respond} onAsk={ask} onClose={() => setFocusId(null)}
           />
         )}
         {section && (
           <div className="sheet">
             {section === 'quadro' && (
               <BoardPage
-                calendarVersion={versions.calendar} listsVersion={versions.lists} agent={butler} lastReply={lastReply}
+                calendarVersion={versions.calendar} listsVersion={versions.lists} habitsVersion={versions.habits} agent={butler} lastReply={lastReply}
                 onSend={(text) => send(text, 'short')} onOpen={go}
               />
             )}

@@ -1,4 +1,4 @@
-/* Arte que muda a cada quadro: monitores, lareira, TV, a floresta pelo vidro e as janelas vistas de fora. */
+/* Arte que muda a cada quadro: monitores, a folha da máquina de escrever, lareira, TV, a floresta pelo vidro e as janelas vistas de fora. */
 import type { ForestView, Light } from './art.ts';
 import type { Rect, Station } from './layout.ts';
 import { type Ctx, glyph, mix, R, rgbOf } from './pixel.ts';
@@ -32,8 +32,57 @@ function assistantScreen({ ctx, t }: Live, s: Rect): void {
   }
 }
 
+/* ---------- a folha na máquina de escrever ---------- */
+
+const PAPER = '#ece6d8', INK = '#4a4f55', RED = '#c0392b';
+/** Segundos por linha datilografada. Uma folha tem 5 linhas e uma pausa para trocar o papel. */
+const LINE_S = 1.4, ROWS = 5;
+const lineLen = (i: number) => 4 + ((Math.imul(i + 7, 2654435761) >>> 0) % 6);
+
+/**
+ * Trabalhando, a folha sobe linha a linha e cada folha cheia vai para a pilha ao lado da máquina.
+ * Numa conferência, as linhas ganham marcas vermelhas. O estado aparece no papel, porque ali não há tela.
+ */
+function paperSheet({ ctx, t, still }: Live, st: Station, a: Walker): void {
+  const s = st.screens[0];
+  if (!s) return;
+  const bottom = s.y + s.h - 3;
+  R(ctx, s.x, s.y, s.w, s.h, PAPER); R(ctx, s.x, s.y, s.w, 1, '#f7f3ea'); R(ctx, s.x, s.y + s.h - 1, s.w, 1, '#c9c2b2');
+  const line = (row: number, len: number, i: number) => {
+    const y = bottom - row * 2;
+    if (y <= s.y || len <= 0) return;
+    R(ctx, s.x + 1, y, Math.min(len, s.w - 2), 1, INK);
+    // conferência: um risco vermelho no fim da linha e um tique na margem
+    if (a.reviewing && i % 3 !== 1) { R(ctx, s.x + Math.min(len, s.w - 2) - 1, y, 2, 1, RED); R(ctx, s.x, y, 1, 1, RED); }
+  };
+  // com movimento reduzido, a máquina datilografa bem mais devagar
+  const typed = a.workT * (still ? 0.25 : 1) / LINE_S;
+  const started = Math.floor(typed), sheet = Math.floor(started / (ROWS + 1)), k = started % (ROWS + 1);
+  const pile = Math.min(6, sheet);
+  for (let i = 0; i < pile; i++) R(ctx, st.cx + 11, 44 - i, 5, 1, i % 2 ? '#e8e1d2' : '#d3cdbe');
+
+  if (a.state === 'working') {
+    for (let i = 0; i < k; i++) line(k - i, lineLen(sheet * 10 + i), i);
+    if (k < ROWS) {
+      const len = Math.round(lineLen(sheet * 10 + k) * (typed - started));
+      line(0, len, k);
+      if (!still && Math.floor(t * 8) % 2 === 0) R(ctx, s.x + 1 + Math.min(len, s.w - 3), bottom, 1, 1, '#1a1c1f');
+    }
+  } else if (a.state === 'waiting') {
+    if (Math.floor(t * 2) % 2 === 0) glyph(ctx, '?', s.x + 5, s.y + 3, '#d98a2b');
+  } else if (a.state === 'error') {
+    glyph(ctx, 'x', s.x + 5, s.y + 3, RED);
+    // a bola de papel amassado no chão, no lugar da fumaça dos monitores
+    R(ctx, st.cx + 11, 63, 4, 1, 'rgba(0,0,0,0.3)'); R(ctx, st.cx + 11, 60, 4, 3, '#e8e1d2'); R(ctx, st.cx + 12, 59, 2, 1, '#e8e1d2'); R(ctx, st.cx + 12, 61, 1, 1, '#b9b2a3');
+  } else {
+    // parada: a folha pela metade
+    for (let i = 0; i < 3; i++) line(3 - i, lineLen(i + 3), i);
+  }
+}
+
 export function drawScreens(live: Live, st: Station, a: Walker | undefined): void {
   if (!a) return;
+  if (st.kind === 'typewriter') { paperSheet(live, st, a); return; }
   const { ctx, t } = live;
   const busy = a.state === 'working' || a.talking;
   st.screens.forEach((s, i) => {

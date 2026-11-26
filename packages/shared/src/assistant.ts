@@ -108,6 +108,31 @@ export type Note = z.infer<typeof Note>;
 export const NoteInput = z.object({ title: z.string().trim().max(200).default(''), content: z.string().max(20_000) });
 export const NotePatch = z.object({ title: z.string().trim().max(200).optional(), content: z.string().max(20_000).optional() });
 
+/* ---------- hábitos ---------- */
+/** Cor dos quadradinhos de um hábito. São tons da casa, não códigos livres. */
+export const HabitColor = z.enum(['moss', 'amber', 'sky', 'rose', 'violet', 'sand']);
+export type HabitColor = z.infer<typeof HabitColor>;
+/** Um dia do calendário no fuso da casa, como "2026-11-25". Não é um instante: mudar de fuso não muda o que foi feito. */
+export const HabitDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use o formato AAAA-MM-DD.');
+export const Habit = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: HabitColor,
+  /** Dias feitos dentro da janela pedida (padrão: o último ano), em ordem. */
+  days: z.array(z.string()),
+  /** Dias seguidos até hoje. Hoje ainda sem marca não quebra: conta até ontem. */
+  streak: z.number(),
+  /** A maior sequência de todas. */
+  best: z.number(),
+  /** Dias feitos desde sempre. */
+  total: z.number(),
+  createdAt: iso,
+  updatedAt: iso,
+});
+export type Habit = z.infer<typeof Habit>;
+export const HabitInput = z.object({ name: z.string().trim().min(1).max(60), color: HabitColor.optional() });
+export const HabitPatch = z.object({ name: z.string().trim().min(1).max(60).optional(), color: HabitColor.optional() });
+
 /* ---------- notificações ---------- */
 export const NotificationKind = z.enum(['reminder', 'alarm', 'timer', 'task', 'digest', 'renfield', 'test']);
 export const ShackNotification = z.object({
@@ -131,5 +156,5 @@ export const PushSubscriptionInput = z.object({
 export type PushSubscriptionInput = z.infer<typeof PushSubscriptionInput>;
 
 /** Tipo de dado que mudou, para as telas se atualizarem (evento `data.changed`). */
-export const DataEntity = z.enum(['calendar', 'reminders', 'timers', 'lists', 'notes']);
+export const DataEntity = z.enum(['calendar', 'reminders', 'timers', 'lists', 'notes', 'habits']);
 export type DataEntity = z.infer<typeof DataEntity>;

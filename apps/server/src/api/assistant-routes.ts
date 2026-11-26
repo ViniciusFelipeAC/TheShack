@@ -1,7 +1,7 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  CalendarEvent, CalendarEventInput, CalendarEventPatch, CalendarOccurrence, ItemInput, ItemPatch, ListInput, Note, NoteInput, NotePatch,
-  PushSubscriptionInput, Reminder, ReminderInput, ReminderPatch, ShackNotification, SnoozeInput, Timer, TimerInput, TodoList,
+  CalendarEvent, CalendarEventInput, CalendarEventPatch, CalendarOccurrence, Habit, HabitDay, HabitInput, HabitPatch, ItemInput, ItemPatch, ListInput,
+  Note, NoteInput, NotePatch, PushSubscriptionInput, Reminder, ReminderInput, ReminderPatch, ShackNotification, SnoozeInput, Timer, TimerInput, TodoList,
 } from '@shack/shared';
 import { parseWhen } from '../assistant/time.ts';
 import type { Shack } from '../shack.ts';
@@ -10,9 +10,10 @@ import { type Env, ERRORS, IdParam, J } from './common.ts';
 const Deleted = z.object({ deleted: z.boolean() });
 const ok = <T extends z.ZodType>(schema: T, description: string) => ({ 200: { ...J(schema), description } });
 const ItemParams = z.object({ id: z.string(), itemId: z.string() });
+const DayParams = z.object({ id: z.string(), day: HabitDay });
 
 export function registerAssistantRoutes(api: OpenAPIHono<Env>, shack: Shack) {
-  const { calendar, reminders, timers, lists, notes, notifier, push, config } = shack;
+  const { calendar, reminders, timers, lists, notes, habits, notifier, push, config } = shack;
 
   /* ---------- agenda ---------- */
   api.openapi(createRoute({
@@ -151,6 +152,38 @@ export function registerAssistantRoutes(api: OpenAPIHono<Env>, shack: Shack) {
     request: { params: IdParam },
     responses: { ...ok(Deleted, 'Apagada'), 401: ERRORS[401], 404: ERRORS[404] },
   }), (c) => { notes.delete(c.req.valid('param').id); return c.json({ deleted: true }, 200); });
+
+  /* ---------- hábitos ---------- */
+  api.openapi(createRoute({
+    method: 'get', path: '/habits', tags: ['Hábitos'], summary: 'Hábitos com os dias feitos. Padrão: o último ano',
+    request: { query: z.object({ from: HabitDay.optional() }) },
+    responses: { ...ok(z.array(Habit), 'Hábitos na ordem em que foram criados'), 400: ERRORS[400], 401: ERRORS[401] },
+  }), (c) => c.json(habits.all(c.req.valid('query').from), 200));
+  api.openapi(createRoute({
+    method: 'post', path: '/habits', tags: ['Hábitos'], summary: 'Cria um hábito',
+    request: { body: J(HabitInput) },
+    responses: { 201: { ...J(Habit), description: 'Hábito' }, 400: ERRORS[400], 401: ERRORS[401], 409: ERRORS[409] },
+  }), (c) => { const b = c.req.valid('json'); return c.json(habits.create(b.name, b.color), 201); });
+  api.openapi(createRoute({
+    method: 'patch', path: '/habits/{id}', tags: ['Hábitos'], summary: 'Renomeia ou troca a cor de um hábito',
+    request: { params: IdParam, body: J(HabitPatch) },
+    responses: { ...ok(Habit, 'Hábito'), 400: ERRORS[400], 401: ERRORS[401], 404: ERRORS[404], 409: ERRORS[409] },
+  }), (c) => c.json(habits.update(c.req.valid('param').id, c.req.valid('json')), 200));
+  api.openapi(createRoute({
+    method: 'delete', path: '/habits/{id}', tags: ['Hábitos'], summary: 'Apaga um hábito e o histórico dele',
+    request: { params: IdParam },
+    responses: { ...ok(Deleted, 'Apagado'), 401: ERRORS[401], 404: ERRORS[404] },
+  }), (c) => { habits.delete(c.req.valid('param').id); return c.json({ deleted: true }, 200); });
+  api.openapi(createRoute({
+    method: 'put', path: '/habits/{id}/days/{day}', tags: ['Hábitos'], summary: 'Marca o dia como feito (AAAA-MM-DD, no fuso da casa)',
+    request: { params: DayParams },
+    responses: { ...ok(Habit, 'Hábito'), 400: ERRORS[400], 401: ERRORS[401], 404: ERRORS[404] },
+  }), (c) => { const p = c.req.valid('param'); return c.json(habits.mark(p.id, p.day, true), 200); });
+  api.openapi(createRoute({
+    method: 'delete', path: '/habits/{id}/days/{day}', tags: ['Hábitos'], summary: 'Desmarca o dia',
+    request: { params: DayParams },
+    responses: { ...ok(Habit, 'Hábito'), 400: ERRORS[400], 401: ERRORS[401], 404: ERRORS[404] },
+  }), (c) => { const p = c.req.valid('param'); return c.json(habits.mark(p.id, p.day, false), 200); });
 
   /* ---------- notificações e push ---------- */
   api.openapi(createRoute({

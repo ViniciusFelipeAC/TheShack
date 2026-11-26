@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Effort } from './schemas.ts';
+import { Effort, TaskUsage } from './schemas.ts';
 
 /* ---------- conversa ---------- */
 export const ChatStyle = z.enum(['normal', 'short', 'voice']);
@@ -192,5 +192,19 @@ export const AccountStatus = z.object({
   agentModels: z.record(z.string(), z.string().nullable()),
   quota: QuotaStatus.nullable(),
   checkedAt: z.string().nullable(),
+  /** Última consulta ao uso do plano (o mesmo número do /usage do Claude Code). Nulo se nunca consultou. */
+  usageCheckedAt: z.string().nullable(),
+  /** Por que a última consulta ao uso do plano falhou. Nulo quando deu certo. */
+  usageError: z.string().nullable(),
 });
 export type AccountStatus = z.infer<typeof AccountStatus>;
+
+/** Tokens das tarefas de um agente: hoje (no fuso da casa) e nos últimos 7 dias. O chat do Renfield não entra. */
+export const AgentTokens = z.object({
+  agentId: z.string(),
+  today: TaskUsage,
+  week: TaskUsage,
+  /** Tarefas com consumo registrado nos últimos 7 dias. */
+  tasks: z.number().int(),
+});
+export type AgentTokens = z.infer<typeof AgentTokens>;

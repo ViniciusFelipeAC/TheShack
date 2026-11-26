@@ -1,15 +1,16 @@
 # The Shack
 
-Sistema pessoal de agentes de IA. O Renfield é o mordomo e a porta de entrada; o etnaD é o agente de programação. Plano completo em [docs/PLAN.md](docs/PLAN.md) e referência da API em [docs/API.md](docs/API.md).
+Sistema pessoal de agentes de IA. O Renfield é o mordomo e a porta de entrada; o etnaD é o agente de programação; a Mina escreve os prompts dele e confere as entregas. Plano completo em [docs/PLAN.md](docs/PLAN.md) e referência da API em [docs/API.md](docs/API.md).
 
 **Estado atual:** Fase 7, a última do plano. A tela principal é a casa: uma casa de vidro numa floresta enevoada, onde cada agente tem a sua mesa e anda pela casa conforme o que está fazendo de verdade. A Shack instala no iPhone como app, pelo Tailscale.
 
 - **O Renfield e o etnaD** conversam e programam de verdade, os dois pelo Agent SDK e só com o login da sua assinatura.
-- **A Shack também tem** agenda, lembretes, alarmes, timers, listas, notas e notificações, pelo chat e por telas próprias. O **Quadro** junta o calendário, a lista de compras e os afazeres numa tela só.
+- **A Shack também tem** agenda, lembretes, alarmes, timers, listas, notas e notificações, pelo chat e por telas próprias. O **Quadro** junta o calendário, a lista de compras, os afazeres e os hábitos numa tela só.
 - **Anexos:** mande fotos, PDFs e arquivos de texto ao Renfield pelo **+** ao lado da caixa de texto, colando com Ctrl+V ou arrastando para o chat.
 
 - **O Renfield:** lembra de você, aprende regras e delega ao etnaD.
 - **O etnaD:** trabalha num branch próprio dentro das pastas que você cadastrar. Ele roda comandos à vontade dentro da pasta, pede sua aprovação só para os arriscados (git, rede, credenciais, sistema, fora da pasta) e entrega um relatório com o que mudou, onde e como testar.
+- **A Mina:** escreve prompts para o etnaD que fogem da "cara de IA" e, quando ele termina, confere se o que foi feito é o que foi pedido. Ela só lê; nunca edita arquivos.
 
 ## Requisitos
 
@@ -48,7 +49,11 @@ Depois de mudar o código do app, rode `npm run build` de novo. O servidor pega 
 npm run shortcut
 ```
 
-No Windows, cria o atalho **The Shack** na Área de Trabalho. Ao abrir, ele sobe o servidor numa janela minimizada, "The Shack (servidor)", e abre o app numa janela própria do Edge. Se o servidor já estiver no ar, só abre o app. Se o código do app mudou desde o último build (depois de um `git pull`, por exemplo), ele roda `npm run build` antes. Para desligar o servidor, feche aquela janela.
+No Windows, cria o atalho **The Shack** na Área de Trabalho. Ao abrir, ele sobe o servidor sem janela, em segundo plano, e abre o app numa janela própria do Edge. Se o servidor já estiver no ar, só abre o app. Se o código do app mudou desde o último build (depois de um `git pull`, por exemplo), ele roda `npm run build` antes. A saída do servidor fica em `data\server.log`, que é recriado a cada partida. Para desligar o servidor:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\open.ps1 -Stop
+```
 
 No Linux, cria o lançador **The Shack** no menu de aplicativos. No GNOME, que não mostra ícones na Área de Trabalho, procure por ele em Atividades e fixe-o na barra. Ele faz o mesmo que o do Windows, com duas diferenças:
 
@@ -106,6 +111,17 @@ Comandos que rodam sem perguntar: os de leitura e os de teste do manifesto, como
 
 Para testar a interface sem gastar cota, ponha `SHACK_RUNNER=simulated` no `.env`. Assim o etnaD só finge trabalhar.
 
+## Prompts e conferência com a Mina
+
+1. Peça no chat: "Pede pra Mina um prompt de site sobre a feira do bairro." Ela trabalha na escrivaninha da ala, com a máquina de escrever.
+2. Quando ela termina, o painel dela mostra o **Prompt pronto**, com **Copiar** e **Mandar para o etnaD**. O botão pergunta o projeto e cria a tarefa do etnaD.
+3. Quando o etnaD termina, a Mina confere sozinha: cada requisito vira atendido, parcial ou faltou, com o arquivo e a linha. O aviso chega no chat.
+4. Se houver pendência, a conferência traz o prompt de correção e o botão **Mandar correção para o etnaD**. A correção parte do branch que ela conferiu, e é conferida de novo quando termina.
+
+Cada volta pede um toque seu: a conferência é automática, a correção não. Para conferir uma tarefa que não nasceu de um prompt dela, use **Conferir com a Mina** no histórico do etnaD.
+
+O "treino" dela são os arquivos `.md` em `agents/mina/knowledge/`: o seu PDF sobre sites com cara de IA e a receita de prompt para o etnaD. Para ensinar mais, solte outro `.md` na pasta (teto de 40 mil caracteres no total).
+
 ## O que dá para pedir ao Renfield
 
 - "Me lembra de tomar o remédio todo dia útil às 8h."
@@ -117,6 +133,7 @@ Para testar a interface sem gastar cota, ponha `SHACK_RUNNER=simulated` no `.env
 - "Anota a senha do Wi-Fi da praia: mar123."
 - "O que o etnaD está fazendo?"
 - "Peça ao etnaD para revisar o README do meu-app."
+- "Pede pra Mina um prompt de site sobre café."
 - "Lembre que prefiro respostas curtas." Ele guarda como memória.
 - "Quando eu disser 'modo foco', ative o modo foco." Ele aprende uma regra com gatilho.
 - "/feedback não use listas." Vira uma regra marcada como nova nas configurações.
@@ -124,6 +141,8 @@ Para testar a interface sem gastar cota, ponha `SHACK_RUNNER=simulated` no `.env
 As mesmas coisas também têm telas próprias, nas abas **Quadro**, **Agenda**, **Lembretes**, **Listas** e **Notas**.
 
 **O Quadro** abre pelo Menu ou pelo botão **Quadro** no topo do chat. Ele mostra o mês com os compromissos, a agenda do dia escolhido, a lista de compras e os afazeres, e tudo se edita ali mesmo. É o mesmo dado que o Renfield usa: o que ele muda pelo chat entra no Quadro na hora, piscando, e no alto do Quadro há uma caixa para pedir a ele sem sair da tela.
+
+**Hábitos:** no fim do Quadro, cada hábito tem uma grade de quadradinhos do último ano, como a de commits do GitHub. Crie quantos quiser em **Novo hábito**, com o nome e a cor que quiser. **Marcar hoje** pinta o quadradinho do dia; tocar em qualquer dia passado marca ou desmarca. Em **Editar** você renomeia, troca a cor ou apaga (o histórico vai junto). Pelo chat também funciona: conte ao Renfield "fui à academia" ou "li ontem" e ele marca; se o hábito não existir, ele pergunta antes de criar.
 
 **Anexos.** Toque no **+** à esquerda da caixa de texto. No iPhone, ele oferece Fototeca, Câmera e Arquivos. No computador, também dá para colar uma imagem com Ctrl+V ou arrastar arquivos para o chat. Vão até 5 por mensagem: fotos (até 5 MB, reduzidas antes de subir), PDFs (até 10 MB) e textos (até 512 KB). Planilhas e documentos do Word não entram; exporte como PDF. Cada anexo pesa na cota, e continua pesando nas respostas seguintes da mesma conversa.
 
@@ -175,12 +194,15 @@ Cada agente vive em `agents/<id>/`. O `agent.yaml` define nome, papel, modelos, 
 
 Os modelos são apelidos em ordem de preferência, por exemplo `[sonnet, haiku]`. O servidor usa o primeiro que o seu plano oferecer.
 
+Outros campos: `runner` diz quem executa as tarefas (`code` para o etnaD, `text` para a Mina, `none` só conversa), `knowledge` lista os documentos que entram no prompt a cada tarefa, e `article` (`o` ou `a`) é o artigo do nome nos textos da casa.
+
 **Aparência na casa:** fica em `appearance`, no `agent.yaml`. As opções estão comentadas no manifesto do Renfield.
 
 - `palette`: as cores da pele, do cabelo, da roupa, do detalhe, da calça e do sapato.
-- `hair`: `neat` ou `messy`.
-- `accessory`: `bowtie`, `headphones` ou `none`.
-- `station`: `single-monitor` ou `dual-monitor`.
+- `hair`: `neat`, `messy` ou `bun` (coque).
+- `accessory`: `bowtie`, `headphones`, `glasses` ou `none`.
+- `station`: `single-monitor`, `dual-monitor` ou `typewriter` (a escrivaninha da Mina).
+- `order`: a ordem das mesas. Com ela, ninguém troca de mesa quando chega um agente novo.
 - `idle`: os lugares preferidos quando o agente está livre.
 
 As cores que faltarem são sorteadas a partir do id, sempre iguais para o mesmo agente.

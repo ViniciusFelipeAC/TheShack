@@ -25,8 +25,11 @@ foreach ($bytes in $images) { $w.Write($bytes) }
 
 $desktop = [Environment]::GetFolderPath('Desktop')
 $link = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'The Shack.lnk'))
-$link.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$link.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$(Join-Path $PSScriptRoot 'open.ps1')"""
+# O Windows 11 entrega os consoles ao Windows Terminal, que ignora o -WindowStyle Hidden do PowerShell e deixa
+# uma janela aberta enquanto o open.ps1 roda. O conhost --headless (o mesmo que o Windows usa por trás dos
+# terminais) roda o PowerShell sem janela nenhuma.
+$link.TargetPath = "$env:SystemRoot\System32\conhost.exe"
+$link.Arguments = "--headless ""$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"" -NoProfile -ExecutionPolicy Bypass -File ""$(Join-Path $PSScriptRoot 'open.ps1')"""
 $link.WorkingDirectory = $root
 $link.IconLocation = $ico
 $link.Description = 'Abre a Shack (sobe o servidor se precisar)'

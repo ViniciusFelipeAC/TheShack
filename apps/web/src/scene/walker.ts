@@ -31,6 +31,10 @@ export class Walker {
   walkDist = 0;
   phase = Math.random() * 10;
   smokeT = 0;
+  /** Segundos sentado trabalhando nesta tarefa: a máquina de escrever conta as folhas por aqui. */
+  workT = 0;
+  /** A tarefa atual confere a entrega de outro agente. */
+  reviewing = false;
   #look = '';
   #world: World;
 
@@ -87,6 +91,7 @@ export class Walker {
   setState(s: SceneState, force = false): void {
     if (this.state === s && !force) return;
     const fromPoi = this.mode === 'poi' ? this.poi : null;
+    if (s === 'working' && this.state !== 'working') this.workT = 0;
     this.releasePoi();
     this.state = s;
     this.mode = null;
@@ -141,6 +146,7 @@ export class Walker {
   }
 
   update(dt: number): void {
+    if (this.state === 'working' && this.mode === 'seated') this.workT += dt;
     if (this.path.length) {
       const p = this.path[0], dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy), step = SPEED * dt;
       if (Math.abs(dx) >= Math.abs(dy)) { if (Math.abs(dx) > 0.01) this.dir = dx > 0 ? 'right' : 'left'; } else this.dir = dy > 0 ? 'down' : 'up';

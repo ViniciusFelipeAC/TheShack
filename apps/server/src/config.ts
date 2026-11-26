@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import { findBrowser } from './system/browser.ts';
 
 /** Raiz do monorepo (apps/server/src -> ../../..). */
 export const ROOT = resolve(import.meta.dirname, '../../..');
@@ -16,6 +17,8 @@ const Env = z.object({
   SHACK_EVENT_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   SHACK_WEB_DIR: z.string().default('./apps/web/dist'),
   SHACK_UPLOADS_DIR: z.string().default('./data/uploads'),
+  SHACK_TMP_DIR: z.string().default('./data/tmp'),
+  SHACK_DESIGN_DIR: z.string().default('./data/design'),
 });
 
 export type Config = {
@@ -32,6 +35,14 @@ export type Config = {
   webDir: string;
   /** Anexos do chat. Um arquivo por anexo, com o id como nome. */
   uploadsDir: string;
+  /** Cópias temporárias, como o worktree que a Mina lê na conferência. Tudo aqui pode ser apagado. */
+  tmpDir: string;
+  /** Uma pasta por tarefa do runner design: input/ (anexos), work/ (HTML e CSS) e out/ (os PNGs). Fica enquanto a tarefa existir. */
+  designDir: string;
+  /** O plugin local com as skills lidas (plugins/shack). */
+  pluginDir: string;
+  /** O navegador do render (Edge, Chrome ou Chromium). Nulo desativa os agentes do runner design. */
+  browserPath: string | null;
 };
 
 /** Carrega o .env da raiz, se existir. Variáveis já definidas no ambiente têm prioridade. */
@@ -53,5 +64,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     eventRetentionDays: e.SHACK_EVENT_RETENTION_DAYS,
     webDir: resolve(ROOT, e.SHACK_WEB_DIR),
     uploadsDir: resolve(ROOT, e.SHACK_UPLOADS_DIR),
+    tmpDir: resolve(ROOT, e.SHACK_TMP_DIR),
+    designDir: resolve(ROOT, e.SHACK_DESIGN_DIR),
+    pluginDir: resolve(ROOT, 'plugins', 'shack'),
+    browserPath: findBrowser(env),
   };
 }

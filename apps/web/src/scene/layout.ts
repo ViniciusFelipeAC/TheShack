@@ -18,7 +18,8 @@ const BASE_SEATS = [3, 10];
 export type Pt = { x: number; y: number };
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Dir = 'down' | 'up' | 'left' | 'right';
-export type StationKind = 'single' | 'dual';
+/** single e dual são mesas com monitor; typewriter é a escrivaninha com máquina de escrever da Mina. */
+export type StationKind = 'single' | 'dual' | 'typewriter';
 export type PoiKind = 'coffee' | 'sofa' | 'shelf' | 'window' | 'fire' | 'plant' | 'armchair';
 export type PoiPose = 'mug' | 'sit_read' | 'browse' | 'stand' | 'water';
 
@@ -33,6 +34,7 @@ export type Station = {
   seatTile: Pt;
   seatAnchor: Pt;
   standTile: Pt;
+  /** O que muda com o estado: os monitores, ou a folha na máquina de escrever. */
   screens: Rect[];
   bezels: Rect[];
   smokeAt: Pt;
@@ -66,11 +68,11 @@ export const annexX = (k: number): number => 332 + ANNEX_PX * k;
 function stationAt(slot: number, room: number, seatCol: number, kind: StationKind, agentId: string | null, outside: Pt): Station {
   const cx = seatCol * T + 8;
   const dual = kind === 'dual';
+  const base = { slot, room, agentId, kind, cx, seatTile: { x: seatCol, y: 4 }, seatAnchor: { x: cx, y: 66 }, standTile: { x: seatCol, y: 5 }, outside };
+  // A folha sai de trás do rolo da máquina; não tem moldura nem LED: o estado aparece no papel.
+  if (kind === 'typewriter') return { ...base, screens: [{ x: cx - 6, y: 26, w: 12, h: 11 }], bezels: [], smokeAt: { x: cx, y: 25 } };
   return {
-    slot, room, agentId, kind, cx,
-    seatTile: { x: seatCol, y: 4 },
-    seatAnchor: { x: cx, y: 66 },
-    standTile: { x: seatCol, y: 5 },
+    ...base,
     screens: dual
       ? [{ x: cx - 20, y: 28, w: 18, h: 11 }, { x: cx + 3, y: 28, w: 18, h: 11 }]
       : [{ x: cx - 10, y: 28, w: 20, h: 12 }],
@@ -78,7 +80,6 @@ function stationAt(slot: number, room: number, seatCol: number, kind: StationKin
       ? [{ x: cx - 22, y: 26, w: 22, h: 15 }, { x: cx + 1, y: 26, w: 22, h: 15 }]
       : [{ x: cx - 12, y: 26, w: 24, h: 16 }],
     smokeAt: { x: dual ? cx + 12 : cx, y: 25 },
-    outside,
   };
 }
 

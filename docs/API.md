@@ -29,6 +29,7 @@ Todo erro tem o mesmo formato:
 | 400 | `unknown_agent` | A tarefa aponta para um agente que não existe |
 | 400 | `workspace_required`, `unknown_workspace` | Tarefa do etnaD sem workspace, ou com um que não existe |
 | 409 | `agent_cannot_run` | O agente não executa tarefas (o Renfield conversa pelo chat) |
+| 409 | `agent_cannot_review` | `reviewOf` numa tarefa para um agente que não confere (só a Mina confere) |
 | 409 | `subscription_required` | A credencial do Claude Code não é a da sua assinatura |
 | 401 | `unauthorized`, `invalid_code` | Token ausente, inválido ou revogado, ou código de pareamento errado |
 | 404 | `not_found` | Recurso ou rota inexistente |
@@ -73,15 +74,53 @@ O etnaD só trabalha dentro de pastas cadastradas como workspace.
   - Nada é enviado com push.
   - Se a pasta tiver mudanças não salvas, o etnaD trabalha direto no branch atual, sem branch nem commit, e avisa no relatório.
 - **Relatório:** `result` traz `summary`, `changes` (arquivo e o que mudou), `howToTest` e `notes`. A tarefa também guarda `model`, `usage` (tokens) e `sessionId`. `POST /tasks/{id}/retry` retoma a mesma sessão.
-- **Conferência:** `result.verification` é escrito só pelo servidor, comparando o relatório com o git: `{ status, reason, diffstat, files }`.
+- **Conferência:** `result.verification` é escrito só pelo servidor, comparando o relatório com o git: `{ status, reason, diffstat, files, branch, commit }`. `branch` e `commit` apontam para a entrega, para a Mina ler e a correção partir dali; ficam nulos quando nenhum arquivo mudou.
   - `ok`: bate com o diff.
   - `suspect`: o relatório lista mudanças e o diff está vazio, ou cita arquivos que não mudaram. A tarefa continua `done`, mas o agente aparece com erro ("Resultado suspeito: …") até você abrir o painel, e a notificação sai com prioridade alta.
   - `unverified`: não havia como conferir (workspace sem git, sem branch por tarefa ou com mudanças não salvas antes).
 - **Nota de passagem:** quando uma tarefa falha ou é cancelada, `handoff` guarda o que foi feito, o que falhou e o que falta. O etnaD escreve a nota num turno curto e sem ferramentas; sem sessão, sem cota ou se o turno falhar, o servidor monta uma nota com os últimos passos e o diffstat. A nota entra no prompt da tentativa seguinte, ou da próxima tarefa no mesmo workspace, até alguma tarefa ali ser concluída. Enquanto a nota é escrita, a tarefa cancelada continua ocupando a vaga do agente.
 - **Perguntas:** quando o etnaD pergunta algo, a aprovação tem `kind: "question"` e `options`. Responda com `POST /approvals/{id}` e `{ "decision": "approve", "answer": "<opção ou texto livre>" }`. No chat, "sim" e "não" não respondem perguntas, só aprovações.
-- **Quem executa tarefas:** só agentes com ferramentas de código, hoje o etnaD. Pedir uma tarefa ao Renfield devolve `agent_cannot_run`, porque ele conversa pelo chat.
+- **Quem executa tarefas:** o campo `runner` do manifesto. `code` é o Claude Code com git (o etnaD), `text` só lê e escreve texto (a Mina), `design` desenha imagens (o Harker, seção abaixo) e `none` só conversa. Sem o campo, vale `code` para agentes com ferramentas de arquivo e `none` para os outros. Pedir uma tarefa ao Renfield devolve `agent_cannot_run`, porque ele conversa pelo chat. `GET /agents` traz o `runner` de cada um, e também o `article` ("o" ou "a") que os textos usam antes do nome.
 
-## Assistente: agenda, lembretes, timers, listas e notas
+## A Mina: prompts e conferência
+
+A Mina escreve prompts para o etnaD e confere se a entrega dele é o que foi pedido. Ela só lê: não tem ferramenta de escrita, shell nem git.
+
+- **Prompt:** `POST /tasks` para a `mina`, com o pedido em `prompt`. `workspaceId` é opcional; com ele, ela lê o projeto para dar contexto. O resultado traz `output` (o prompt em markdown, até 20 mil caracteres) e `direction` (`{ fonts, palette, layout }`). As direções das últimas 5 tarefas entram no prompt dela, para não repetir fonte nem paleta.
+- **Base de conhecimento:** `knowledge` no manifesto lista arquivos da pasta do agente (`knowledge/*.md`). Eles entram no prompt a cada tarefa. Um caminho fora da pasta ou mais de 40 mil caracteres no total desativam o agente, com o motivo em `manifestError`.
+- **Mandar para o etnaD:** `POST /tasks` para o `etnad` com o `output` em `prompt` e `parentId` apontando para a tarefa da Mina. O botão do painel faz isso; o seu toque é a aprovação.
+- **Conferência:** `POST /tasks` para a `mina` com `reviewOf` (a tarefa concluída que ela confere). A tarefa precisa estar `done` (senão, 409 `conflict`). O resultado traz `review`: `{ verdict: "pass" | "issues", items: [{ requirement, status: "met" | "partial" | "missing", evidence, note }], aiSignals: { count, found } | null }`. Com pendência, `output` traz o prompt de correção. Um item pendente sempre faz o `verdict` virar `issues`.
+- **Conferência automática:** quando uma tarefa cuja `parentId` aponta para uma tarefa da Mina termina `done`, o servidor cria a conferência sozinho, uma vez, com `origin.kind = "agent"`. Tarefa que falhou ou foi cancelada não é conferida. A correção não é automática.
+- **Onde ela lê:** se a entrega tem `verification.commit`, o servidor abre um `git worktree` daquele commit em `data/tmp/review-<id>` (`SHACK_TMP_DIR`) e apaga no fim, inclusive em caso de falha. Sem commit, ela lê o projeto como está. O relatório de quem fez entra no contexto dela como conteúdo externo.
+- **Verificação dela:** `suspect` se o relatório citar mudanças ou se a cópia conferida mudar durante a conferência; senão, `ok`.
+- **Correção:** `POST /tasks` para o `etnad` com `parentId` apontando para a conferência e o mesmo `workspaceId` da entrega. O runner do etnaD parte do commit conferido, num branch novo, e o diff conta só o que a correção mudou. Se o commit sumiu ou a pasta tem mudanças não salvas, a tarefa falha antes de gastar cota, com o motivo.
+
+## Imagens: o runner `design`
+
+O runner `design` escreve HTML e CSS e transforma cada página num PNG do Instagram. Ele usa as skills lidas de `plugins/shack` e o navegador já instalado, sem baixar outro.
+
+- **Manifesto:** `runner: design` e `skills` com os nomes das pastas de `plugins/shack/skills`, como `[canvas-design, theme-factory]`. O agente fica desativado, com o motivo em `manifestError`, quando:
+  - uma skill não existe no plugin;
+  - um agente de outro runner pede skills;
+  - não há navegador. O servidor procura o Edge, o Chrome e o Chromium nos lugares de sempre; `SHACK_BROWSER_PATH` aponta para outro.
+- **O que entra na sessão:** só o plugin `shack`, com as skills do manifesto, e a ferramenta `render`. As suas configurações do Claude Code, outros MCPs e os conectores do claude.ai ficam de fora. Se o plugin não carregar, a tarefa falha antes do primeiro pedido ao modelo.
+- **Pasta da tarefa:** `data/design/<taskId>/` (`SHACK_DESIGN_DIR`), com `input/` (os anexos), `work/` (o HTML e o CSS) e `out/` (os PNGs). Ele escreve só em `work/`; lê a pasta da tarefa, o plugin e, com `workspaceId`, o projeto, sem escrever nele. Não tem shell. A pasta fica enquanto a tarefa existir.
+- **Formatos:** `feed` (1080×1350, o padrão), `square` (1080×1080) e `story` (1080×1920). A ferramenta aceita também "4:5", "9:16", "retrato", "quadrado" e afins.
+- **O render:** JavaScript desligado e toda requisição de rede bloqueada; só abrem arquivos da pasta da tarefa e as fontes do plugin, em `/fonts/<arquivo>`. São no máximo 10 imagens e 40 chamadas de render por tarefa. Repetir a tarefa (`retry`) apaga o `out/` anterior e mantém o `work/`.
+- **Resultado:** `images` (`[{ name, format, width, height, bytes, alt }]`, na ordem do carrossel), `output` (a legenda, com as hashtags) e `direction`.
+- **Conferência:** o servidor lê `out/` e escreve `result.verification`. O relatório nunca é a prova; o arquivo é. A tarefa fica `suspect` quando:
+  - uma imagem do relatório não existe, não é PNG ou não tem o tamanho exato de um formato;
+  - o hash do arquivo não é o que a ferramenta de render gravou;
+  - o carrossel mistura formatos, porque o Instagram corta as outras imagens pela primeira;
+  - a legenda passa de 2.200 caracteres ou de 30 hashtags, os limites do Instagram.
+
+  `images` só traz as imagens que passaram na leitura do arquivo.
+- **Baixar:** `GET /tasks/{id}/images/{name}` exige o token, e o nome precisa estar em `result.images`; não há caminho livre. O app baixa com o token e mostra por `blob:`, como os anexos.
+- **Ajustar e correção:** uma tarefa cujo `parentId` aponta para uma tarefa de imagens, ou para a conferência de uma, parte do trabalho dela. O servidor copia o `work/` (se a tarefa nova ainda não tem), as fotos de `input/` e as imagens já conferidas de `out/`. Elas entram no registro do render com o hash do arquivo, então o ajuste refaz só as imagens que mudam e lista todas no relatório.
+- **Pelo Renfield:** a ferramenta `tasks_create` aceita `attach_files`, que leva os anexos da mensagem mais recente do dono da casa que tem anexos, entre as 6 últimas da conversa.
+- **Anexos:** `POST /tasks` aceita `attachmentIds` (até 10), os mesmos ids de `POST /attachments`. Os arquivos são copiados para `input/` na criação, e não na execução: um anexo solto some em 24 horas, e a tarefa pode esperar mais que isso na fila. Um id que não existe devolve 400 e nenhuma tarefa é criada. Anexos para um agente de outro runner também devolvem 400.
+
+## Assistente: agenda, lembretes, timers, listas, notas e hábitos
 
 Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no fuso da casa (`SHACK_TZ`, padrão `America/Sao_Paulo`).
 
@@ -94,6 +133,8 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
 | `GET /timers`, `POST /timers` (`{ "seconds", "label" }`), `DELETE /timers/{id}` | Timers. Eles sobrevivem a reinícios |
 | `GET/POST /lists`, `PATCH/DELETE /lists/{id}`, `POST /lists/{id}/items`, `PATCH/DELETE /lists/{id}/items/{itemId}`, `POST /lists/{id}/clear-done` | Listas com itens marcáveis. "Mercado" (lista de compras) e "Afazeres" (to-do) já vêm criadas e aparecem no Quadro do app. O Renfield entende "lista de compras", "supermercado", "to-do" e "pendências" como essas duas, pelo id, mesmo que você as renomeie |
 | `GET /notes?q=`, `POST /notes`, `PATCH/DELETE /notes/{id}` | Notas rápidas, com busca por texto |
+| `GET /habits?from=`, `POST /habits` (`{ "name", "color" }`), `PATCH/DELETE /habits/{id}` | Hábitos do Quadro, quantos você quiser, na ordem em que foram criados. Cada um traz os dias feitos (`days`, padrão: o último ano; `from=AAAA-MM-DD` pede outra janela), a sequência atual (`streak`, que não quebra enquanto hoje ainda não foi marcado), o recorde (`best`) e o `total`. `color` é `moss`, `amber`, `sky`, `rose`, `violet` ou `sand`; sem ela, cada hábito novo pega o próximo tom. Apagar leva o histórico junto |
+| `PUT/DELETE /habits/{id}/days/{day}` | Marca e desmarca um dia (`AAAA-MM-DD`, no fuso da casa). Dia futuro é recusado com 400 |
 
 **Agendador:** quem dispara é o servidor, que confere a cada segundo o que venceu. Se o servidor estava desligado:
 
@@ -110,7 +151,7 @@ Horários vão em ISO 8601. Sem fuso (por exemplo, `2026-10-22T08:00`), valem no
   - As chaves VAPID são geradas na primeira vez e ficam no banco.
   - Assinaturas que o navegador cancelou são removidas sozinhas.
 
-**Eventos:** `data.changed` com `{ entity: "calendar" | "reminders" | "timers" | "lists" | "notes" }` avisa as telas para recarregar. `reminder.fired`, `timer.finished` e `notification.created` também chegam pelo WebSocket.
+**Eventos:** `data.changed` com `{ entity: "calendar" | "reminders" | "timers" | "lists" | "notes" | "habits" }` avisa as telas para recarregar. `reminder.fired`, `timer.finished` e `notification.created` também chegam pelo WebSocket.
 
 ## Chat com o Renfield
 
@@ -196,6 +237,17 @@ Em `GET /system/account`, cada item de `availableModels` traz:
 
 Com `allowed_warning`, a ferramenta `tasks_create` do Renfield devolve `needsConfirmation` em vez de criar a tarefa. Ele pergunta a você e chama de novo com `quota_ok: true`.
 
+### Uso do plano
+
+- **`POST /system/usage/refresh`:** consulta o uso do plano, o mesmo número do `/usage` do Claude Code, e devolve a conta. As janelas ficam em `quota.windows`: `five_hour` (a sessão de 5 horas), `seven_day` (a semana), `seven_day_opus`, `seven_day_sonnet` e `model:<nome>`, cada uma com `percent` (0 a 100) e `resetsAt`.
+  - Não gasta modelo: o servidor abre uma sessão do Claude Code sem mensagem, pede o uso e fecha.
+  - No máximo uma consulta por minuto; antes disso, a rota devolve a última. Pedidos simultâneos dividem a mesma consulta.
+  - O status de cada janela sai da porcentagem: `allowed_warning` a partir de 90% e `rejected` em 100%. Os avisos do SDK durante as tarefas continuam atualizando as mesmas janelas.
+  - Uma falha não apaga o último número: `usageError` diz "Indisponível" e o motivo, e `usageCheckedAt` diz quando foi a última consulta.
+  - A API do SDK por trás disso é experimental. Se ela mudar, a rota passa a responder com `usageError`.
+- **`GET /system/usage/tasks`:** os tokens das tarefas de cada agente, hoje (no fuso da casa) e nos últimos 7 dias, com o que veio do cache. O chat do Renfield não entra.
+- **No app:** o canto de cima mostra a sessão e a semana, e tocar nele abre o detalhe com a hora em que cada janela renova. O app consulta ao abrir, ao voltar para ele e a cada 5 minutos enquanto está à vista.
+
 ### Acesso pelo celular
 
 `GET /system/remote` diz como o celular chega na Shack: `{ tailscale: "missing" | "stopped" | "running", url, serving, serveCommand, webBuilt }`. `url` é o endereço HTTPS da máquina na sua tailnet; `serving` diz se o `tailscale serve` já repassa esse endereço para a porta da Shack.
@@ -216,7 +268,7 @@ O `seq` cresce sempre e serve para replay. Os eventos ficam guardados por 30 dia
 
 | Tipo | `data` |
 |---|---|
-| `agent.status` | `{ status, activity, currentTaskId }` |
+| `agent.status` | `{ status, activity, currentTaskId, currentTaskKind }`. `currentTaskKind` é `review` quando a tarefa atual é uma conferência |
 | `agent.updated` | `{ change: "added" \| "changed" \| "removed" \| "settings", error }`. `settings` é a troca de modelo ou esforço pelo app |
 | `task.created`, `task.updated`, `task.waiting_input`, `task.done`, `task.failed`, `task.cancelled` | a tarefa completa |
 | `task.progress` | `{ message, … }` |

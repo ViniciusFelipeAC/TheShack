@@ -6,7 +6,7 @@ import { type AgentRunner, type RunIO, SHUTDOWN_REASON } from '../core/task-bus.
 import type { Workspaces } from '../core/workspaces.ts';
 import { errorMessage } from '../errors.ts';
 import type { Account } from '../renfield/account.ts';
-import { finishBranch, type GitOutcome, type GitSession, startBranch } from './git.ts';
+import { finishBranch, type GitOutcome, type GitSession, type StartPoint, startBranch } from './git.ts';
 import { describeTool, shellRisk, workspaceGuard } from './guard.ts';
 import { Inbox } from './inbox.ts';
 import { verifyReport } from './verify.ts';
@@ -49,7 +49,7 @@ const HANDOFF_MAX = 2000;
 
 function taskPrompt(task: Task, ws: Workspace, git: GitSession | null, previous: RunIO['previousHandoff']): string {
   const gitLine = git?.branch
-    ? `Você está no branch ${git.branch}, criado só para esta tarefa a partir de ${git.baseLabel}.`
+    ? `Você está no branch ${git.branch}, criado só para esta tarefa a partir de ${git.startLabel ? `${git.startLabel}, a entrega que esta tarefa corrige` : git.baseLabel}.`
     : 'Trabalhe no estado atual da pasta.';
   const handoff = previous
     ? [
@@ -84,19 +84,24 @@ export class CodeRunner implements AgentRunner {
   #account: Account;
   #workspaces: Workspaces;
   #fallbackModel: string;
+  #startFrom: (task: Task) => StartPoint | null;
 
-  constructor(o: { account: Account; workspaces: Workspaces; fallbackModel: string }) {
+  constructor(o: { account: Account; workspaces: Workspaces; fallbackModel: string; startFrom?: (task: Task) => StartPoint | null }) {
     this.#account = o.account;
     this.#workspaces = o.workspaces;
     this.#fallbackModel = o.fallbackModel;
+    this.#startFrom = o.startFrom ?? (() => null);
   }
 
   async run(task: Task, agent: AgentDef, io: RunIO): Promise<TaskResult> {
     if (!task.workspaceId) throw new Error('A tarefa não tem workspace.');
     const ws = this.#workspaces.require(task.workspaceId);
 
+    // Uma correção parte do branch que a Mina conferiu. Se isso não der, a tarefa falha antes de gastar cota.
+    const from = this.#startFrom(task);
     let git: GitSession | null = null;
-    try { git = await startBranch(ws, task); } catch (err) {
+    try { git = await startBranch(ws, task, from); } catch (err) {
+      if (from) throw err;
       git = { branch: null, base: '', baseLabel: '', note: `Não consegui preparar o git (${errorMessage(err)}), então trabalhei sem branch.` };
     }
     io.progress(git?.branch ? `Trabalhando no branch ${git.branch}` : 'Começando');
@@ -194,8 +199,9 @@ export class CodeRunner implements AgentRunner {
   async #report(outcome: { structured: unknown; text: string }, ws: Workspace, git: GitSession | null, task: Task): Promise<TaskResult> {
     const parsed = TaskResult.safeParse(outcome.structured);
     const result: TaskResult = parsed.success ? parsed.data : { summary: outcome.text.trim().slice(0, 4000) || 'Concluído.', changes: [], howToTest: '' };
-    // Só o servidor escreve a conferência. Se o modelo mandou algo neste campo, vai fora.
+    // Só o servidor escreve a conferência e a lista de imagens. Se o modelo mandou algo nesses campos, vai fora.
     delete result.verification;
+    delete result.images;
 
     let real: GitOutcome | null = null;
     let unverifiedReason: string;
@@ -208,7 +214,12 @@ export class CodeRunner implements AgentRunner {
       unverifiedReason = git.branch ? 'Não consegui ler o git no fim da tarefa.' : `Não houve branch da tarefa. ${git.note ?? ''}`.trim();
     }
     if (real?.note) result.notes = [result.notes, real.note].filter(Boolean).join('\n');
-    result.verification = verifyReport(ws.path, result, { files: real?.files ?? null, diffstat: real?.diffstat ?? null, unverifiedReason });
+    result.verification = {
+      ...verifyReport(ws.path, result, { files: real?.files ?? null, diffstat: real?.diffstat ?? null, unverifiedReason }),
+      // Sem arquivo mudado, o branch é apagado; aí não há o que a conferência ler nem de onde a correção partir.
+      branch: real?.commit ? git?.branch ?? null : null,
+      commit: real?.commit ?? null,
+    };
     return result;
   }
 

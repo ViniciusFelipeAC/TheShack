@@ -5,10 +5,11 @@ import { simulatedRunner } from '../src/agents/simulated.ts';
 import { createApp } from '../src/api/app.ts';
 import { type Config, ROOT } from '../src/config.ts';
 import { createShack } from '../src/shack.ts';
+import { findBrowser } from '../src/system/browser.ts';
 import { FakeEngine } from './fake-engine.ts';
 
 /** Shack isolada: banco em memória (ou arquivo temporário), cópia da pasta agents/ e Renfield falso. */
-export function setup(opts: { stepMs?: number; dbFile?: boolean; productionRunners?: boolean } = {}) {
+export function setup(opts: { stepMs?: number; dbFile?: boolean; productionRunners?: boolean; browserPath?: string | null } = {}) {
   const engine = new FakeEngine();
   const dir = mkdtempSync(join(tmpdir(), 'shack-test-'));
   const agentsDir = join(dir, 'agents');
@@ -17,7 +18,8 @@ export function setup(opts: { stepMs?: number; dbFile?: boolean; productionRunne
     host: '127.0.0.1', port: 0, timezone: 'America/Sao_Paulo',
     dbPath: opts.dbFile ? join(dir, 'shack.db') : ':memory:', agentsDir,
     fallbackModel: 'sonnet', runner: opts.productionRunners ? 'sdk' : 'simulated', eventRetentionDays: 30,
-    webDir: join(dir, 'web'), uploadsDir: join(dir, 'uploads'),
+    webDir: join(dir, 'web'), uploadsDir: join(dir, 'uploads'), tmpDir: join(dir, 'tmp'),
+    designDir: join(dir, 'design'), pluginDir: join(ROOT, 'plugins', 'shack'), browserPath: opts.browserPath === undefined ? findBrowser() : opts.browserPath,
   };
   // Relógio controlado pelo teste (lembretes, alarmes e timers) e push falso.
   let current: Date | null = null;
@@ -33,6 +35,8 @@ export function setup(opts: { stepMs?: number; dbFile?: boolean; productionRunne
   const make = (stepMs = opts.stepMs ?? 5) => createShack(config, {
     runner: opts.productionRunners ? undefined : simulatedRunner({ stepMs }), engine, progressThrottleMs: 0,
     clock, startScheduler: false, pushSender,
+    // Os testes nunca abrem o Claude Code de verdade; quem precisa troca shack.planUsage.
+    planUsage: async () => { throw new Error('sem Claude Code nos testes'); },
   });
   const shack = make();
   const { app } = createApp(shack);

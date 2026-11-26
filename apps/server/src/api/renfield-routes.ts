@@ -1,14 +1,15 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  AccountStatus, ActiveModeInput, Attachment, ATTACHMENT_LIMITS, ChatMessage, Conversation, FeedbackInput, Memory, MemoryInput, MemoryPatch,
+  AccountStatus, ActiveModeInput, AgentTokens, Attachment, ATTACHMENT_LIMITS, ChatMessage, Conversation, FeedbackInput, Memory, MemoryInput, MemoryPatch,
   Mode, ModeInput, OpenConversationInput, Rule, RuleInput, RulePatch, SendMessageInput, SendMessageResult,
 } from '@shack/shared';
 import { bodyLimit } from 'hono/body-limit';
+import { agentTokens, WEEK_MS } from '../core/usage.ts';
+import { tasksRepo } from '../db/repos.ts';
 import type { Shack } from '../shack.ts';
-import { type Env, ERRORS, IdParam, J } from './common.ts';
+import { Binary, type Env, ERRORS, IdParam, J } from './common.ts';
 
 const Deleted = z.object({ deleted: z.boolean() });
-const Binary = z.string().openapi({ type: 'string', format: 'binary' });
 
 export function registerRenfieldRoutes(api: OpenAPIHono<Env>, shack: Shack) {
   const { chat, mind, account, attachments } = shack;
@@ -182,4 +183,22 @@ export function registerRenfieldRoutes(api: OpenAPIHono<Env>, shack: Shack) {
     summary: 'Assinatura em uso, modelos do seu plano, modelo de cada agente e estado da cota',
     responses: { 200: { ...J(AccountStatus), description: 'Conta' }, 401: ERRORS[401] },
   }), (c) => c.json(account.status, 200));
+
+  api.openapi(createRoute({
+    method: 'post', path: '/system/usage/refresh', tags: ['Sistema'],
+    summary: 'Consulta o uso do plano (o /usage do Claude Code), sem gastar modelo. No máximo uma consulta por minuto; antes disso, devolve a última.',
+    responses: { 200: { ...J(AccountStatus), description: 'Conta, com as janelas do plano em quota.windows' }, 401: ERRORS[401] },
+  }), async (c) => {
+    await account.refreshPlan(shack.planUsage);
+    return c.json(account.status, 200);
+  });
+
+  api.openapi(createRoute({
+    method: 'get', path: '/system/usage/tasks', tags: ['Sistema'],
+    summary: 'Tokens das tarefas de cada agente, hoje e nos últimos 7 dias. O chat do Renfield não entra.',
+    responses: { 200: { ...J(z.array(AgentTokens)), description: 'Tokens por agente' }, 401: ERRORS[401] },
+  }), (c) => {
+    const now = new Date();
+    return c.json(agentTokens(tasksRepo(shack.db).usageSince(new Date(now.getTime() - WEEK_MS).toISOString()), shack.config.timezone, now), 200);
+  });
 }

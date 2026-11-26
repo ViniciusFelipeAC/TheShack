@@ -1,13 +1,16 @@
 import type { AgentInfo, CalendarOccurrence, ChatMessage, TodoList } from '@shack/shared';
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { boardLists, dayKey, dayTitle, eventsByDay, fromKey, localIso, monthGrid, monthTitle, WEEKDAYS, whenText } from '../board.ts';
 import type { Section } from '../Hud.tsx';
 import { api } from '../live.ts';
 import { Portrait } from '../Portrait.tsx';
+import { useFresh } from '../useFresh.ts';
+import { HabitsCard } from './Habits.tsx';
 
 type Props = {
   calendarVersion: number;
   listsVersion: number;
+  habitsVersion: number;
   /** O agente de chat (o Renfield). */
   agent: AgentInfo | null;
   /** A última resposta dele, para quem está no celular, onde o chat fica atrás do Quadro. */
@@ -16,30 +19,8 @@ type Props = {
   onOpen(section: Section): void;
 };
 
-/**
- * Itens que apareceram desde a última leitura, para piscarem quando o Renfield mexe pelo chat.
- * Trocar de `scope` (de mês, por exemplo) não conta como novidade.
- */
-function useFresh(ids: string[] | null, scope: string): Set<string> {
-  const seen = useRef<{ scope: string; ids: Set<string> } | null>(null);
-  const [fresh, setFresh] = useState<Set<string>>(new Set());
-  const sig = ids?.join('|') ?? null;
-  useEffect(() => {
-    if (!ids) return;
-    const prev = seen.current;
-    seen.current = { scope, ids: new Set(ids) };
-    if (!prev || prev.scope !== scope) return;
-    const added = ids.filter((id) => !prev.ids.has(id));
-    if (!added.length) return;
-    setFresh(new Set(added));
-    const t = setTimeout(() => setFresh(new Set()), 2600);
-    return () => clearTimeout(t);
-  }, [sig, scope]);
-  return fresh;
-}
-
-/** Calendário com a agenda do dia, lista de compras e afazeres. É o mesmo dado que o Renfield usa. */
-export function BoardPage({ calendarVersion, listsVersion, agent, lastReply, onSend, onOpen }: Props) {
+/** Calendário com a agenda do dia, lista de compras, afazeres e hábitos. É o mesmo dado que o Renfield usa. */
+export function BoardPage({ calendarVersion, listsVersion, habitsVersion, agent, lastReply, onSend, onOpen }: Props) {
   const today = dayKey(new Date());
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [selected, setSelected] = useState(today);
@@ -81,7 +62,7 @@ export function BoardPage({ calendarVersion, listsVersion, agent, lastReply, onS
     <main className="page panel board">
       <header className="page-head">
         <h2>Quadro</h2>
-        <p className="muted small">Calendário, compras e afazeres. É o mesmo quadro do Renfield: o que ele muda pelo chat aparece aqui na hora.</p>
+        <p className="muted small">Calendário, compras, afazeres e hábitos. É o mesmo quadro do Renfield: o que ele muda pelo chat aparece aqui na hora.</p>
       </header>
       <div className="page-body board-body">
         <RenfieldBar agent={agent} lastReply={lastReply} onSend={onSend} />
@@ -131,6 +112,7 @@ export function BoardPage({ calendarVersion, listsVersion, agent, lastReply, onS
             <button className="btn ghost small" type="button" onClick={() => onOpen('listas')}>Ver todas as listas</button>
           </div>
         </div>
+        <HabitsCard version={habitsVersion} />
       </div>
     </main>
   );

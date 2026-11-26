@@ -35,10 +35,17 @@ export function watchViewport(): void {
   if (!vv || !matchMedia('(pointer: coarse)').matches) return;
   const root = document.documentElement;
   root.classList.add('vv');
+  // No app instalado do iPhone, com a barra de status translúcida, a página começa embaixo da barra de status,
+  // mas o iOS informa a altura visível sem ela: sobrava uma faixa vazia de 47 px no pé da tela.
+  // Sem teclado, a altura certa é a da tela inteira.
+  const iphoneApp = isStandalone() && /iPhone/.test(navigator.userAgent);
+  const fullScreen = () => (matchMedia('(orientation: portrait)').matches ? screen.height : screen.width);
   const update = () => {
-    root.style.setProperty('--app-h', `${Math.round(vv.height)}px`);
+    const keyboard = window.innerHeight - vv.height > 120;
+    const height = !keyboard && iphoneApp ? Math.max(vv.height, fullScreen()) : vv.height;
+    root.style.setProperty('--app-h', `${Math.round(height)}px`);
     root.style.setProperty('--app-top', `${Math.round(vv.offsetTop)}px`);
-    root.toggleAttribute('data-keyboard', window.innerHeight - vv.height > 120);
+    root.toggleAttribute('data-keyboard', keyboard);
   };
   vv.addEventListener('resize', update);
   vv.addEventListener('scroll', update);

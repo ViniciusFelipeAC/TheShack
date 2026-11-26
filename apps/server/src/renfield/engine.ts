@@ -36,12 +36,12 @@ const ACTIVITY: Record<string, string> = {
   tasks_create: 'Delegando uma tarefa', tasks_cancel: 'Cancelando uma tarefa', tasks_answer: 'Respondendo a uma tarefa',
   memory_add: 'Anotando', memory_update: 'Corrigindo uma anotação', memory_search: 'Procurando nas anotações', rules_add: 'Aprendendo uma regra',
   calendar_list: 'Consultando a agenda', calendar_create: 'Marcando na agenda', lists_all: 'Olhando as listas', lists_add: 'Anotando na lista',
-  lists_check: 'Riscando da lista',
+  lists_check: 'Riscando da lista', habits_list: 'Olhando os hábitos', habits_check: 'Marcando o hábito',
 };
 // O resto, pelo grupo: o quadro e o chat mostram o que ele está mexendo, em vez de só "Trabalhando".
 const ACTIVITY_GROUP: Record<string, string> = {
   calendar: 'Mexendo na agenda', lists: 'Arrumando as listas', reminders: 'Cuidando dos lembretes', timers: 'Cuidando dos timers',
-  notes: 'Mexendo nas notas', notify: 'Mandando um aviso', memory: 'Revendo as anotações', rules: 'Revendo as regras', tasks: 'Cuidando das tarefas',
+  notes: 'Mexendo nas notas', habits: 'Cuidando dos hábitos', notify: 'Mandando um aviso', memory: 'Revendo as anotações', rules: 'Revendo as regras', tasks: 'Cuidando das tarefas',
 };
 export const activityOf = (tool: string): string => ACTIVITY[tool] ?? ACTIVITY_GROUP[tool.split('_')[0]!] ?? 'Trabalhando';
 

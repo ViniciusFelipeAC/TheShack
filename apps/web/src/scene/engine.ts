@@ -1,6 +1,7 @@
 /* Motor da cena: personagens andando, câmera, luz do dia e da noite, neblina e entrada por toque.
    O React só informa o estado real dos agentes; aqui ele vira gente andando pela casa.
-   As partes ficam em arquivos vizinhos: walker.ts (agentes), animated.ts (telas, fogo, TV), light.ts, sky.ts, input.ts e wolf.ts. */
+   As partes ficam em arquivos vizinhos: walker.ts (agentes), stations.ts (mesas), animated.ts (telas, folha, fogo, TV),
+   particles.ts (fumaça e chuva), light.ts, sky.ts, input.ts e wolf.ts. */
 import { drawFire, drawScreens, drawTv, drawTvSpill, forestView, type Live, tvLight, windowsOut } from './animated.ts';
 import {
   buildExterior, buildForestFloor, buildFrame, buildFurniture, buildInterior, exteriorLights, exteriorPanes,
@@ -10,8 +11,10 @@ import { attachInput } from './input.ts';
 import { BASE_W, planHouse, type Pt, type Rect, ROOM_H, T } from './layout.ts';
 import { applyLight } from './light.ts';
 import { houseOrder, type SceneAgentInput, sceneStateOf, stationKindOf } from './model.ts';
+import { Particles } from './particles.ts';
 import { clamp, glyph, mk, R } from './pixel.ts';
 import { buildFog, drawFog, FOG_ALPHA, sky, spHour, tf, type Weather } from './sky.ts';
+import { glows } from './stations.ts';
 import { activityOf, REST_KINDS, Walker, type World } from './walker.ts';
 import { Wolf, WOLF_AREA, WOLF_Y } from './wolf.ts';
 
@@ -37,7 +40,6 @@ export type SceneHandle = {
 };
 
 const DOOR_SPAWN: Pt = { x: 152, y: 187 };
-type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number };
 
 /* ---------- a cena ---------- */
 
@@ -50,11 +52,12 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
   const world: World = { layout: planHouse([]), resting: false };
   const walkers = new Map<string, Walker>();
   const wolf = new Wolf();
-  const smoke: Particle[] = [], flue: Particle[] = [];
-  let drops: Pt[] = [];
+  const particles = new Particles();
 
   let dpr = 1, cw = 1, ch = 1, zoom = 3, zMin = 1, zMax = 8, zDef = 3, userZoom = false, camX = 160, camY = 104, offX = 0, offY = 0;
-  let map: MapName = 'in', follow = false, focusId: string | null = null, t = 0, flueT = 0, H = spHour();
+  /** A câmera mexeu (arrastar ou zoom): o próximo quadro desenha mesmo no ritmo econômico do celular. */
+  let moved = false;
+  let map: MapName = 'in', follow = false, focusId: string | null = null, t = 0, H = spHour();
   let fade: { a: number; phase: 'out' | 'in'; to: MapName } | null = null;
   let weather: Weather = 'fog', layoutSig = '', populated = false, lastActivity = '', insetTop = 0, insetBottom = 0;
   /** O tempo da cena para a arte animada; o laço atualiza `t` a cada quadro. */
@@ -79,8 +82,7 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
       }),
       views: forestViews(L), panes, doorPane: door, outLights: exteriorLights(L),
     };
-    const W = L.outW * T + 32;
-    drops = Array.from({ length: Math.round((150 * W) / 480) }, () => ({ x: Math.random() * W, y: Math.random() * 340 }));
+    particles.resetRain(L.outW * T + 32);
   }
   buildStatics();
 
@@ -104,44 +106,6 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
     R(ctx, v.x, v.y, v.w, v.h, 'rgba(8,12,14,0.22)');
     drawFog(ctx, FOG, v, FOG_ALPHA[weather].around, t, RM);
     ctx.restore();
-  }
-
-  function updateParticles(dt: number): void {
-    if (!RM) {
-      for (const a of walkers.values()) {
-        if (a.state === 'error' && a.mode === 'seated') {
-          a.smokeT -= dt;
-          if (a.smokeT <= 0) {
-            a.smokeT = 0.35;
-            const s = a.desk.smokeAt;
-            smoke.push({ x: s.x + Math.random() * 6 - 3, y: s.y, vx: (Math.random() - 0.5) * 2, vy: -5 - Math.random() * 3, life: 2.2, max: 2.2 });
-          }
-        }
-      }
-      if (map === 'out') {
-        flueT -= dt;
-        if (flueT <= 0) { flueT = 0.5; flue.push({ x: 301 + Math.random() * 3, y: 42, vx: 2 + Math.random() * 2, vy: -6 - Math.random() * 3, life: 3.6, max: 3.6 }); }
-        if (weather === 'rain') {
-          const W = world.layout.outW * T + 32;
-          for (const d of drops) { d.y += 180 * dt; d.x -= 28 * dt; if (d.y > 330) { d.y -= 350; d.x = Math.random() * W; } if (d.x < -10) d.x += W - 10; }
-        }
-      }
-    }
-    for (const arr of [smoke, flue]) {
-      for (let i = arr.length - 1; i >= 0; i--) {
-        const p = arr[i];
-        p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
-        if (p.life <= 0) arr.splice(i, 1);
-      }
-    }
-  }
-
-  function drawParticles(arr: Particle[], rgb: string): void {
-    for (const p of arr) {
-      const k = p.life / p.max, s = Math.round(2 + (1 - k) * 3);
-      ctx.fillStyle = `rgba(${rgb},${(k * 0.55).toFixed(3)})`;
-      ctx.fillRect(Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
-    }
   }
 
   /* ---------- desenho ---------- */
@@ -185,7 +149,7 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
       if (o.agent) drawAgent(o.agent);
       else if (o.item) { ctx.drawImage(o.item.img, o.item.x, o.item.y); o.item.extra?.(); }
     }
-    drawParticles(smoke, '140,146,150');
+    particles.draw(ctx, 'smoke', '140,146,150');
   }
 
   function drawExterior(h: number): void {
@@ -195,12 +159,9 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
     // o lobo passa atrás dos pinheiros: o recorte do que fica na frente dele vem por cima
     wolf.draw(ctx, t, L.outW * T);
     if (wolf.visible() && statics.wolfFront) ctx.drawImage(statics.wolfFront, WOLF_AREA.x, WOLF_AREA.y);
-    drawParticles(flue, tf(h).dark > 0.5 ? '90,96,102' : '190,198,200');
+    particles.draw(ctx, 'flue', tf(h).dark > 0.5 ? '90,96,102' : '190,198,200');
     drawFog(ctx, FOG, { x: 0, y: 0, w: L.outW * T, h: L.outH * T }, FOG_ALPHA[weather].out, t, RM);
-    if (weather === 'rain') {
-      ctx.fillStyle = 'rgba(170,192,200,0.42)';
-      for (const d of drops) { ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 4); ctx.fillRect(Math.round(d.x) - 1, Math.round(d.y) + 3, 1, 2); }
-    }
+    if (weather === 'rain') particles.drawRain(ctx);
   }
 
   function lightsIn(): Light[] {
@@ -208,7 +169,8 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
     const L = interiorLights(world.layout, fl);
     for (const st of world.layout.stations) {
       const a = st.agentId ? walkers.get(st.agentId) : undefined;
-      if (!a) continue;
+      // a folha da máquina de escrever não acende a sala
+      if (!a || !glows(st)) continue;
       const busy = a.state === 'working' || a.talking;
       const k = busy ? 1 : a.state === 'idle' ? 0.45 : 0.8, col = a.state === 'error' ? '255,96,86' : a.state === 'waiting' ? '255,200,120' : '150,200,235';
       for (const s of st.screens) L.push({ x: s.x + s.w / 2, y: s.y + s.h / 2, r: 14 + 16 * k, c: col, g: 0.16 * k, cut: 0.8 });
@@ -274,9 +236,12 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
   }
 
   function resize(): void {
-    const r = stage.getBoundingClientRect();
-    // No celular (iPhone tem 3x), 2x já deixa o pixel art nítido e gasta bem menos bateria por quadro.
-    dpr = Math.min(window.devicePixelRatio || 1, matchMedia('(pointer: coarse)').matches ? 2 : 3);
+    // O tamanho é o do canvas, sem a borda do palco: medir o palco deixava o desenho 2 px maior que o canvas,
+    // e o navegador reescalava a imagem inteira.
+    const r = canvas.getBoundingClientRect();
+    // O canvas usa a resolução real da tela. Antes o celular ficava em 2x para poupar bateria, mas o iPhone tem 3x:
+    // o navegador esticava a imagem 1,5 vez e borrava o pixel art. A bateria agora é poupada no ritmo (veja COARSE).
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
     cw = Math.max(1, Math.round(r.width * dpr));
     ch = Math.max(1, Math.round(r.height * dpr));
     canvas.width = cw;
@@ -292,6 +257,7 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
   function zoomTo(nz: number, sx = cw / 2, sy = ch / 2): void {
     nz = clamp(nz, zMin, zMax);
     if (nz === zoom) return;
+    moved = true;
     const wx = (sx - offX) / zoom, wy = (sy - offY) / zoom;
     zoom = nz;
     userZoom = true;
@@ -336,7 +302,7 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
       return { x: (sx - offX) / zoom, y: (sy - offY) / zoom, sx, sy };
     },
     cam: () => ({ x: camX, y: camY, zoom, dpr }),
-    pan(x, y) { camX = x; camY = y; clampCam(); offsets(); },
+    pan(x, y) { camX = x; camY = y; clampCam(); offsets(); moved = true; },
     zoomTo,
     grabbed() { follow = false; },
     hot: (w) => Boolean(hitAgent(w)) || hitWolf(w) || hitDoor(w),
@@ -350,11 +316,14 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
 
   /* ---------- laço principal ---------- */
 
-  let last = performance.now(), raf = 0, uiT = 0, hT = 0;
+  let last = performance.now(), raf = 0, uiT = 0, hT = 0, lastDraw = 0;
+  // No celular, a cena desenha a 30 quadros por segundo: em 3x, cada quadro custa mais. Arrastar e dar zoom
+  // desenham na hora, para o dedo não sentir atraso. A animação anda no mesmo ritmo: o update usa o tempo real.
+  const COARSE = matchMedia('(pointer: coarse)').matches;
   function update(dt: number): void {
     for (const a of walkers.values()) a.update(dt);
     wolf.update(dt, map === 'out', tf(H).dark);
-    updateParticles(dt);
+    particles.update(dt, { walkers: walkers.values(), out: map === 'out', rain: weather === 'rain', width: world.layout.outW * T + 32, still: RM });
     const f = focusId ? walkers.get(focusId) : undefined;
     if (follow && f && map === 'in') {
       const k = RM ? 1 : Math.min(1, dt * 5);
@@ -398,7 +367,7 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
     t += dt;
     live.t = t;
     update(dt);
-    render();
+    if (!COARSE || moved || now - lastDraw >= 31) { lastDraw = now; moved = false; render(); }
     raf = requestAnimationFrame(loop);
   }
   const onVisibility = () => {
@@ -454,6 +423,7 @@ export function createScene(canvas: HTMLCanvasElement, stage: HTMLElement, event
         w.setState(state);
       }
       w.talking = talking;
+      w.reviewing = a.currentTaskKind === 'review';
     }
     for (const [id, w] of walkers) if (!seen.has(id)) { w.releasePoi(); walkers.delete(id); }
     if (ordered.length) populated = true;

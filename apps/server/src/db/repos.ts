@@ -53,7 +53,7 @@ export type DevicesRepo = ReturnType<typeof devicesRepo>;
 const toTask = (r: Row): Task => ({
   id: s(r.id), title: s(r.title), prompt: s(r.prompt), assignee: s(r.assignee),
   origin: parseJson<TaskOrigin>(r.origin)!, status: r.status as TaskStatus, priority: r.priority as Priority,
-  workspaceId: str(r.workspace_id), parentId: str(r.parent_id), sessionId: str(r.session_id), model: str(r.model),
+  workspaceId: str(r.workspace_id), parentId: str(r.parent_id), reviewOf: str(r.review_of), sessionId: str(r.session_id), model: str(r.model),
   result: parseJson<TaskResult>(r.result), error: str(r.error), usage: parseJson<TaskUsage>(r.usage), handoff: str(r.handoff),
   createdAt: s(r.created_at), startedAt: str(r.started_at), finishedAt: str(r.finished_at),
 });
@@ -79,8 +79,22 @@ export function tasksRepo(db: Db) {
   return {
     get,
     insert(t: Task): void {
-      db.prepare(`INSERT INTO tasks (id, title, prompt, assignee, origin, status, priority, workspace_id, parent_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(t.id, t.title, t.prompt, t.assignee, json(t.origin), t.status, t.priority, t.workspaceId, t.parentId, t.createdAt);
+      db.prepare(`INSERT INTO tasks (id, title, prompt, assignee, origin, status, priority, workspace_id, parent_id, review_of, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(t.id, t.title, t.prompt, t.assignee, json(t.origin), t.status, t.priority, t.workspaceId, t.parentId, t.reviewOf, t.createdAt);
+    },
+    /** Conferências já pedidas para uma tarefa, das mais novas para as mais antigas. */
+    reviewsOf(taskId: string): Task[] {
+      return db.prepare('SELECT * FROM tasks WHERE review_of = ? ORDER BY created_at DESC, rowid DESC').all(taskId).map(toTask);
+    },
+    /** Últimas tarefas concluídas de um agente, das mais novas para as mais antigas. */
+    /** Consumo das tarefas que terminaram depois de `since`, para a soma de tokens por agente. */
+    usageSince(since: string): Array<{ assignee: string; usage: TaskUsage; finishedAt: string }> {
+      return db.prepare('SELECT assignee, usage, finished_at FROM tasks WHERE finished_at >= ? AND usage IS NOT NULL').all(since)
+        .map((r) => ({ assignee: String(r.assignee), usage: parseJson<TaskUsage>(r.usage)!, finishedAt: String(r.finished_at) }))
+        .filter((r) => r.usage);
+    },
+    recentDone(assignee: string, limit: number): Task[] {
+      return db.prepare(`SELECT * FROM tasks WHERE assignee = ? AND status = 'done' ORDER BY finished_at DESC, rowid DESC LIMIT ?`).all(assignee, limit).map(toTask);
     },
     update(id: string, patch: TaskPatch): Task {
       const keys = Object.keys(patch) as Array<keyof TaskPatch>;

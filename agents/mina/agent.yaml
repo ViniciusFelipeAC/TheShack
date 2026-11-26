@@ -1,0 +1,44 @@
+# Mina: escreve prompts para o etnaD e confere se o que ele entregou é o que foi pedido.
+# Edite à vontade. O servidor recarrega este arquivo sozinho.
+id: mina
+name: Mina
+role: Prompts e conferência
+article: a             # "a Mina" nos textos da casa
+
+# Apelidos dos modelos do seu plano, em ordem de preferência.
+model: [sonnet]
+effort: medium
+
+persona: persona.md
+chat: false
+
+# text: só lê e escreve texto. Sem git, sem shell e sem editar arquivos; quem programa é o etnaD.
+runner: text
+
+# Documentos que entram no prompt dela a cada tarefa. Para ensinar mais, solte outro .md na pasta.
+# Teto: 40 mil caracteres no total. Acima disso, ela fica desativada até você tirar ou resumir algo.
+knowledge: [knowledge/*.md]
+
+tools:
+  builtin: [Read, Glob, Grep]   # só leitura, e só na pasta do projeto ou na cópia que ela confere
+
+workspace: optional
+
+limits:
+  concurrency: 1
+  maxTurns: 60
+
+# Como ela aparece na casa. As opções estão comentadas no agent.yaml do Renfield.
+appearance:
+  order: 2               # mesa da ala do lado da passagem, perto do etnaD
+  palette:
+    skin: "#f1c9a5"
+    hair: "#5a3a26"      # castanho, preso num coque
+    outfit: "#d5dbe0"    # blusa clara de gola alta
+    accent: "#4f8f6a"    # broche de jade
+    pants: "#2a2433"     # saia escura
+    shoes: "#1a1416"
+  hair: bun
+  accessory: glasses
+  station: typewriter
+  idle: [tea, armchair, bookshelf]

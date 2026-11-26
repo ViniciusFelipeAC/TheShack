@@ -1,6 +1,7 @@
 import type { AccountInfo, ModelInfo, Query, SDKRateLimitInfo } from '@anthropic-ai/claude-agent-sdk';
 import type { AccountStatus, QuotaStatus, QuotaWindow } from '@shack/shared';
 import type { EventBus } from '../core/events.ts';
+import { errorMessage } from '../errors.ts';
 import { HttpError } from '../errors.ts';
 
 /** Variáveis que fariam o Claude Code cobrar por uso em vez de usar a sua assinatura. */
@@ -13,6 +14,17 @@ const BILLING_VARS = [
 const PAID_SOURCES = new Set(['ANTHROPIC_API_KEY', 'apiKeyHelper', '/login managed key', 'user', 'project', 'org', 'temporary']);
 const RECHECK_MS = 10 * 60_000;
 const SEVERITY = { allowed: 0, allowed_warning: 1, rejected: 2 } as const;
+
+/** Janelas do plano que o /usage informa, com os mesmos nomes dos avisos do SDK. */
+const PLAN_WINDOWS = ['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet'] as const;
+/** Intervalo mínimo entre duas consultas ao uso do plano. */
+const PLAN_TTL_MS = 60_000;
+/** A partir daqui a janela fica em alerta, e o Renfield confirma antes de mandar tarefa nova ao etnaD. */
+const WARN_PERCENT = 90;
+
+type PlanWindow = { utilization: number | null; resets_at: string | null };
+/** O que o /usage do Claude Code devolve. O servidor usa o SDK; os testes, uma resposta pronta. */
+export type PlanUsageFetcher = () => Promise<{ rate_limits_available: boolean; rate_limits: Record<string, unknown> | null }>;
 
 /** O SDK manda o uso como fração (0 a 1) ou porcentagem; a Shack guarda sempre de 0 a 100. */
 export function toPercent(u: number | undefined | null): number | null {
@@ -33,8 +45,9 @@ export class Account {
   #published: string | null = null;
   #status: Omit<AccountStatus, 'quota'> = {
     subscriptionOk: null, subscriptionType: null, credentialSource: null, problem: null,
-    availableModels: [], agentModels: {}, checkedAt: null,
+    availableModels: [], agentModels: {}, checkedAt: null, usageCheckedAt: null, usageError: null,
   };
+  #planInFlight: Promise<void> | null = null;
 
   constructor(bus: EventBus, clock: () => Date = () => new Date()) {
     this.#bus = bus;
@@ -108,6 +121,44 @@ export class Account {
     });
     if (info.isUsingOverage !== undefined || info.overageInUse !== undefined) this.#overage = Boolean(info.isUsingOverage || info.overageInUse);
     this.#publishIfChanged();
+  }
+
+  /**
+   * Lê o uso do plano, o mesmo número do /usage do Claude Code: a sessão de 5 horas, a semana e as janelas por modelo.
+   * Não gasta modelo. Os avisos do SDK só chegam quando algum agente roda; esta consulta dá o número a qualquer hora.
+   * Uma consulta por minuto no máximo, e pedidos simultâneos dividem a mesma.
+   */
+  refreshPlan(fetch: PlanUsageFetcher, opts: { force?: boolean } = {}): Promise<void> {
+    if (this.#planInFlight) return this.#planInFlight;
+    const last = this.#status.usageCheckedAt ? Date.parse(this.#status.usageCheckedAt) : 0;
+    if (!opts.force && this.#clock().getTime() - last < PLAN_TTL_MS) return Promise.resolve();
+    this.#planInFlight = (async () => {
+      try {
+        const u = await fetch();
+        if (!u.rate_limits_available || !u.rate_limits) {
+          this.#status.usageError = 'Indisponível: o Claude Code não informou os limites do plano (a credencial é de assinatura?).';
+          return;
+        }
+        const at = this.#clock().toISOString();
+        const set = (kind: string, w: PlanWindow | null | undefined) => {
+          if (!w) return;
+          const percent = typeof w.utilization === 'number' && Number.isFinite(w.utilization) ? Math.max(0, Math.min(100, w.utilization)) : null;
+          const status = percent === null ? 'allowed' : percent >= 100 ? 'rejected' : percent >= WARN_PERCENT ? 'allowed_warning' : 'allowed';
+          this.#windows.set(kind, { kind, status, percent, resetsAt: w.resets_at ?? null, updatedAt: at });
+        };
+        const r = u.rate_limits as Record<string, PlanWindow | null | undefined> & { model_scoped?: Array<PlanWindow & { display_name: string }> };
+        for (const kind of PLAN_WINDOWS) set(kind, r[kind]);
+        for (const m of r.model_scoped ?? []) set(`model:${m.display_name}`, m);
+        this.#status.usageError = null;
+      } catch (err) {
+        this.#status.usageError = `Indisponível: ${errorMessage(err)}`;
+      } finally {
+        this.#status.usageCheckedAt = this.#clock().toISOString();
+        this.#planInFlight = null;
+        this.#publishIfChanged();
+      }
+    })();
+    return this.#planInFlight;
   }
 
   #quota(): QuotaStatus | null {

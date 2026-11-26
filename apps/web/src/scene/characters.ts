@@ -84,6 +84,12 @@ function torsoFront(d: Frame): void {
     P(AX - 2, y0 + 1, 1, 3, CORD); P(AX + 1, y0 + 1, 1, 3, CORD); P(AX - 2, y0 + 4, 1, 1, '#8f8a80'); P(AX + 1, y0 + 4, 1, 1, '#8f8a80');
     P(AX - 3, y0 + 5, 6, 2, T.oD); P(AX - 3, y0 + 5, 6, 1, T.oDD); P(AX - 3, y0 + 5, 1, 2, T.oDD); P(AX + 2, y0 + 5, 1, 2, T.oDD);
     P(AX - 5, y0 + 7, 10, 1, T.oD);
+  } else if (L.accessory === 'glasses') {
+    // blusa de gola alta, o broche no colarinho, uma fileira de botões e a faixa da saia
+    P(AX - 2, y0, 4, 2, T.oL); P(AX - 2, y0, 4, 1, T.o); P(AX + 1, y0 + 1, 1, 1, T.oD);
+    P(AX - 1, y0 + 2, 2, 2, T.acc); P(AX - 1, y0 + 2, 1, 1, shade(L.accent, 0.35)); P(AX, y0 + 3, 1, 1, T.accD);
+    P(AX, y0 + 4, 1, 1, T.oD); P(AX, y0 + 6, 1, 1, T.oD);
+    P(AX - 5, y0 + 7, 10, 1, T.pa);
   } else {
     // camisa de gola com uma fileira de botões e o cinto com fivela
     P(AX - 1, y0, 2, 2, T.skD); P(AX - 3, y0, 2, 1, T.shirt); P(AX + 1, y0, 2, 1, T.shirt); P(AX - 2, y0 + 1, 1, 1, T.shirtD); P(AX + 1, y0 + 1, 1, 1, T.shirtD);
@@ -105,6 +111,9 @@ function torsoBack(d: Frame): void {
     // o capuz caído nas costas
     P(AX - 3, y0, 6, 3, T.oL); P(AX - 2, y0 + 3, 4, 1, T.oL); P(AX - 1, y0 + 4, 2, 1, T.o); P(AX - 2, y0, 4, 1, T.oD); P(AX - 3, y0 + 2, 1, 1, T.o); P(AX + 2, y0 + 2, 1, 1, T.oD);
     P(AX - 5, y0 + 7, 10, 1, T.oD);
+  } else if (L.accessory === 'glasses') {
+    // gola alta e a faixa da saia
+    P(AX - 2, y0, 4, 1, T.oL); P(AX - 1, y0 + 1, 1, 6, T.oD); P(AX - 5, y0 + 7, 10, 1, T.pa);
   } else {
     P(AX - 3, y0, 6, 1, T.shirt); P(AX - 1, y0 + 1, 1, 6, T.oD);
   }
@@ -133,6 +142,11 @@ function faceFront(d: Frame, blink: boolean): void {
   P(AX - 4, hy + 4, 2, 1, T.hrD); P(AX + 2, hy + 4, 2, 1, T.hrD);
   P(AX - 1, hy + 8, 2, 1, T.mouth);
   P(AX - 4, hy + 7, 1, 1, BLUSH); P(AX + 3, hy + 7, 1, 1, BLUSH);
+  if (d.L.accessory === 'glasses') {
+    // óculos de leitura de aro fino dourado: dois aros, a ponte e as hastes até as orelhas
+    for (const x of [AX - 4, AX + 1]) { P(x, hy + 4, 3, 1, BRASS); P(x, hy + 7, 3, 1, BRASS); P(x, hy + 5, 1, 2, BRASS); P(x + 2, hy + 5, 1, 2, BRASS); }
+    P(AX - 1, hy + 5, 2, 1, BRASS); P(AX - 5, hy + 5, 1, 1, BRASS); P(AX + 4, hy + 5, 1, 1, BRASS);
+  }
 }
 
 function hairFront(d: Frame): void {
@@ -142,6 +156,11 @@ function hairFront(d: Frame): void {
     // risca do lado, penteado para trás, com brilho
     P(AX - 5, hy + 2, 5, 1, T.hr); P(AX + 2, hy + 2, 3, 1, T.hr); P(AX + 1, hy + 1, 1, 1, T.hrD);
     P(AX - 3, hy - 2, 3, 1, T.hrL); P(AX - 4, hy - 1, 2, 1, T.hrL); P(AX + 3, hy, 2, 2, T.hrD); P(AX - 6, hy + 3, 1, 2, T.hrD);
+  } else if (L.hairStyle === 'bun') {
+    // risca no meio, o cabelo puxado para os lados e o coque aparecendo no alto
+    P(AX, hy - 1, 1, 2, T.hrD); P(AX - 5, hy + 2, 3, 2, T.hr); P(AX + 2, hy + 2, 3, 2, T.hr); P(AX - 3, hy + 2, 1, 1, T.hrD);
+    P(AX - 2, hy - 5, 4, 3, T.hr); P(AX - 1, hy - 6, 2, 1, T.hr); P(AX - 1, hy - 5, 1, 1, T.hrL); P(AX + 1, hy - 4, 1, 2, T.hrD);
+    P(AX - 3, hy - 2, 2, 1, T.hrL); P(AX + 2, hy - 1, 2, 1, T.hrL);
   } else {
     // bagunçado: pontas para cima e franja desigual
     P(AX - 4, hy - 3, 3, 1, T.hr); P(AX - 3, hy - 4, 1, 1, T.hr); P(AX, hy - 3, 2, 1, T.hr); P(AX + 1, hy - 4, 2, 1, T.hr); P(AX + 3, hy - 3, 1, 1, T.hr); P(AX + 4, hy - 2, 1, 1, T.hr);
@@ -158,6 +177,10 @@ function headBack(d: Frame): void {
   P(AX - 5, hy + 4, 1, 4, T.hrD); P(AX + 3, hy + 1, 2, 6, T.hrD);
   if (L.hairStyle === 'neat') {
     P(AX - 3, hy - 2, 4, 1, T.hrL); P(AX - 4, hy - 1, 3, 1, T.hrL); P(AX - 2, hy, 2, 1, T.hrL); P(AX - 4, hy + 6, 8, 2, T.hrD);
+  } else if (L.hairStyle === 'bun') {
+    // o coque redondo atrás da cabeça, preso por um grampo
+    P(AX - 3, hy + 1, 6, 5, T.hrD); P(AX - 2, hy, 4, 7, T.hrD); P(AX - 2, hy + 1, 4, 4, T.hr); P(AX - 2, hy + 1, 2, 1, T.hrL);
+    P(AX + 1, hy + 3, 2, 1, T.acc); P(AX - 4, hy + 7, 8, 1, T.hrD);
   } else {
     P(AX - 4, hy - 3, 3, 1, T.hr); P(AX - 3, hy - 4, 1, 1, T.hr); P(AX, hy - 3, 2, 1, T.hr); P(AX + 1, hy - 4, 2, 1, T.hr); P(AX + 3, hy - 3, 1, 1, T.hr); P(AX - 3, hy + 8, 2, 1, T.hr); P(AX + 1, hy + 8, 3, 1, T.hr);
     P(AX - 2, hy - 2, 3, 1, T.hrL); P(AX - 3, hy + 2, 1, 2, T.hrL); P(AX + 1, hy + 4, 1, 2, T.hrD);
@@ -190,6 +213,7 @@ function side(d: Frame): void {
   P(AX - 4, y0, 8, 8, T.o); P(AX - 4, y0, 2, 8, T.oD); P(AX + 3, y0 + 1, 1, 5, T.oL); P(AX - 4, y0 + 7, 8, 1, T.oDD);
   if (L.accessory === 'bowtie') { P(AX + 2, y0, 2, 5, T.shirt); P(AX + 2, y0 + 1, 1, 4, T.shirtD); P(AX + 3, y0, 2, 2, T.acc); P(AX + 4, y0, 1, 1, T.accD); P(AX + 3, y0 + 5, 1, 1, BRASS); }
   else if (L.accessory === 'headphones') { P(AX - 5, y0, 3, 4, T.oL); P(AX - 4, y0 + 1, 1, 2, T.oD); P(AX + 2, y0 + 1, 1, 3, CORD); P(AX - 4, y0 + 7, 8, 1, T.oD); }
+  else if (L.accessory === 'glasses') { P(AX + 1, y0, 3, 2, T.oL); P(AX + 3, y0 + 2, 1, 1, T.acc); P(AX - 4, y0 + 7, 8, 1, T.pa); }
   else { P(AX + 2, y0, 2, 1, T.shirt); P(AX + 3, y0 + 1, 1, 5, T.oD); }
   // cabeça de perfil: nariz, olho, orelha e cabelo cobrindo a nuca
   P(AX - 4, hy, 9, 9, T.sk); P(AX - 3, hy + 9, 7, 1, T.skD); P(AX + 5, hy + 5, 1, 2, T.sk); P(AX + 5, hy + 6, 1, 1, T.skD);
@@ -201,6 +225,8 @@ function side(d: Frame): void {
   if (L.hairStyle === 'neat') { P(AX - 2, hy + 2, 1, 1, T.hr); P(AX + 3, hy + 2, 2, 1, T.hr); P(AX - 3, hy - 1, 5, 1, T.hrL); P(AX - 5, hy + 3, 1, 4, T.hrD); }
   else { P(AX - 3, hy - 2, 2, 1, T.hr); P(AX, hy - 3, 2, 2, T.hr); P(AX + 3, hy - 2, 1, 1, T.hr); P(AX + 3, hy + 2, 2, 2, T.hr); P(AX - 2, hy + 2, 1, 1, T.hr); P(AX - 1, hy - 1, 3, 1, T.hrL); P(AX, hy - 3, 1, 1, T.hrL); P(AX - 6, hy + 1, 1, 2, T.hr); }
   if (L.temples) P(AX - 3, hy + 2, 1, 3, L.temples);
+  if (L.hairStyle === 'bun') { P(AX - 8, hy + 1, 3, 4, T.hr); P(AX - 8, hy + 1, 1, 1, T.hrL); P(AX - 7, hy + 4, 2, 1, T.hrD); }
+  if (L.accessory === 'glasses') { P(AX + 1, hy + 4, 3, 1, BRASS); P(AX + 1, hy + 7, 3, 1, BRASS); P(AX + 3, hy + 5, 1, 2, BRASS); P(AX - 1, hy + 4, 2, 1, BRASS); }
   if (L.accessory === 'headphones') { P(AX - 3, hy - 2, 6, 1, HP); P(AX - 3, hy - 1, 1, 3, HP); P(AX - 2, hy + 2, 4, 5, HP); P(AX - 2, hy + 3, 3, 1, HP_L); P(AX - 1, hy + 4, 2, 2, L.accent); }
   if (pose === 'water') {
     // regador: o braço vai à frente e a água cai em gotas

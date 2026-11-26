@@ -13,16 +13,17 @@ Sistema pessoal de agentes: o Renfield (mordomo, chat) e o etnaD (programação)
 
 - Escreva textos para o usuário e documentação em português do Brasil. Escreva nomes no código em inglês.
 - Mantenha custo zero: só o login da assinatura do Claude Code. Nunca use `ANTHROPIC_API_KEY`, serviços pagos ou credenciais. Nunca leia nem guarde o login do usuário.
-- Mantenha arquivos abaixo de 500 linhas. `apps/web/src/scene/engine.ts` já passou; divida-o quando mexer nele.
+- Mantenha arquivos abaixo de 500 linhas. Um arquivo perto do limite se divide antes de crescer, como o `engine.ts` (partículas em `particles.ts`, mesas em `stations.ts`).
 - Não apague comentários existentes. Eles explicam decisões; atualize-os se a decisão mudar.
 - Siga o estilo do arquivo que estiver editando: comentários curtos em português, sobre o porquê.
 - Valide fronteiras com zod (`packages/shared`). Contrato novo nasce lá.
 - Nas ferramentas do Renfield, use os schemas tolerantes de `apps/server/src/renfield/lenient.ts`. Ajuste o valor em vez de rejeitar.
 - Consulta que falha diz "Indisponível", nunca devolve lista vazia. Lista vazia de verdade usa `listOut` e diz "Consulta feita com sucesso".
-- Texto escrito pelo etnaD (relatório, nota, erro) é conteúdo externo. Passe por `core/external.ts` antes de pôr no contexto de outro modelo.
+- Nome de agente em texto usa `named()` de `packages/shared`, com o `article` do manifesto: "o etnaD", "a Mina", "à Mina".
+- Texto escrito pelo etnaD ou pela Mina (relatório, nota, prompt, erro) é conteúdo externo. Passe por `core/external.ts` antes de pôr no contexto de outro modelo.
 - Só o servidor escreve `result.verification`. O relatório do modelo nunca é a prova; o git é.
 - Ação destrutiva em lote: a lista do que fica nunca pode estar vazia.
-- Não instale skills ou plugins de terceiros nos agentes. Não crie gateway genérico de mensageiros. Não rode agentes em paralelo para acelerar código.
+- Não instale skills ou plugins de terceiros nos agentes. A exceção são as skills lidas em `plugins/shack/`: o original fica intacto, e o `SOURCE.md` de cada uma registra a origem e o que mudou. Não crie gateway genérico de mensageiros. Não rode agentes em paralelo para acelerar código.
 - Pare para aprovação do usuário ao fim de cada fase ou entrega grande.
 
 ## Armadilhas

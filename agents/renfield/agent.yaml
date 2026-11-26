@@ -13,10 +13,10 @@ chat: true
 
 tools:
   builtin: []          # sem arquivos e sem shell
-  shack: [agents, tasks, calendar, reminders, timers, lists, notes, memory, rules, notify]
+  shack: [agents, tasks, calendar, reminders, timers, lists, notes, habits, memory, rules, notify]
 
 # Ferramentas que sempre pedem a sua confirmação.
-confirm: [tasks_cancel, calendar_delete, reminders_delete, lists_delete, notes_delete, memory_delete]
+confirm: [tasks_cancel, calendar_delete, reminders_delete, lists_delete, notes_delete, habits_delete, memory_delete]
 
 limits:
   concurrency: 1
@@ -24,6 +24,8 @@ limits:
 
 # Como ele aparece na casa. Cores em hexadecimal; as que faltarem são sorteadas a partir do id.
 appearance:
+  # order (opcional): a ordem das mesas. Os agentes de chat vêm primeiro; depois, quem tem número, do menor
+  # para o maior; por último, os outros, pelo nome da pasta. Assim ninguém troca de mesa quando chega um agente novo.
   palette:
     skin: "#e3b896"
     hair: "#26252b"
@@ -33,7 +35,7 @@ appearance:
     accent: "#7a2a2e"    # gravata-borboleta
     pants: "#1c1e24"
     shoes: "#121317"
-  hair: neat             # neat ou messy
-  accessory: bowtie      # bowtie, headphones ou none
-  station: single-monitor   # single-monitor ou dual-monitor
+  hair: neat             # neat, messy ou bun (coque)
+  accessory: bowtie      # bowtie, headphones, glasses ou none
+  station: single-monitor   # single-monitor, dual-monitor ou typewriter
   idle: [tea, sofa-read, fireplace]   # tea, coffee, sofa-read, armchair, fireplace, bookshelf, water-plant, window

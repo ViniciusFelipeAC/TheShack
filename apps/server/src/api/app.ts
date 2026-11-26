@@ -14,9 +14,10 @@ import { type Env, ERRORS, IdParam, J } from './common.ts';
 import { registerRenfieldRoutes } from './renfield-routes.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import { registerAssistantRoutes } from './assistant-routes.ts';
+import { registerDesignRoutes } from './design-routes.ts';
 import { WsHub, wsHandler } from './ws.ts';
 
-export const API_VERSION = '0.9.0';
+export const API_VERSION = '0.12.0';
 
 const PUBLIC_PATHS = new Set(['/api/v1/health', '/api/v1/auth/pair', '/api/v1/openapi.json', '/api/v1/ws']);
 
@@ -225,6 +226,7 @@ export function createApp(shack: Shack) {
   registerRenfieldRoutes(api, shack);
   registerWorkspaceRoutes(api, shack);
   registerAssistantRoutes(api, shack);
+  registerDesignRoutes(api, shack);
 
   api.doc('/openapi.json', {
     openapi: '3.0.3',

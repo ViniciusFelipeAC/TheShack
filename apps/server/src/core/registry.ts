@@ -1,5 +1,5 @@
-import { existsSync, type FSWatcher, readdirSync, readFileSync, watch, writeFileSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { existsSync, type FSWatcher, readdirSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { AgentManifest } from '@shack/shared';
 import { parse as parseYaml } from 'yaml';
 import { conflict, notFound } from '../errors.ts';
@@ -11,8 +11,15 @@ export type AgentDef = {
   /** Nulo quando o manifesto é inválido; o agente fica desativado. */
   manifest: AgentManifest | null;
   persona: string;
+  /** Documentos de `knowledge`, na ordem do manifesto. Entram no prompt a cada tarefa. */
+  knowledge: KnowledgeDoc[];
   error: string | null;
 };
+
+export type KnowledgeDoc = { name: string; content: string };
+
+/** Teto da base de conhecimento: uns 10 mil tokens por tarefa. Acima disso, o agente fica desativado. */
+export const KNOWLEDGE_MAX_CHARS = 40_000;
 
 /** Lê `agents/<id>/agent.yaml` e a persona. Uma pasta nova vira um agente novo. */
 export class Registry {
@@ -22,10 +29,13 @@ export class Registry {
   #stamps = new Map<string, string>();
   #watcher: FSWatcher | null = null;
   #timer: NodeJS.Timeout | undefined;
+  #validate: (m: AgentManifest) => string | null;
 
-  constructor(dir: string, bus: EventBus | null) {
+  /** `validate` confere o que o manifesto sozinho não sabe, como o navegador e as skills do runner design. */
+  constructor(dir: string, bus: EventBus | null, validate: (m: AgentManifest) => string | null = () => null) {
     this.#dir = dir;
     this.#bus = bus;
+    this.#validate = validate;
   }
 
   /** Relê todas as pastas. Publica `agent.updated` para o que mudou, a não ser no carregamento silencioso. */
@@ -93,7 +103,7 @@ export class Registry {
 
   #read(folder: string): AgentDef {
     const dir = join(this.#dir, folder);
-    const fail = (error: string): AgentDef => ({ id: folder, dir, manifest: null, persona: '', error });
+    const fail = (error: string): AgentDef => ({ id: folder, dir, manifest: null, persona: '', knowledge: [], error });
     const file = join(dir, 'agent.yaml');
     if (!existsSync(file)) return fail('Arquivo agent.yaml não encontrado.');
 
@@ -106,16 +116,52 @@ export class Registry {
       return fail(`Manifesto inválido. ${issues}`);
     }
     if (parsed.data.id !== folder) return fail(`O id "${parsed.data.id}" precisa ser igual ao nome da pasta "${folder}".`);
+    const invalid = this.#validate(parsed.data);
+    if (invalid) return fail(invalid);
 
     const personaPath = this.#personaPath(dir, parsed.data.persona);
     if (!personaPath) return fail('O caminho da persona precisa ficar dentro da pasta do agente.');
     const persona = existsSync(personaPath) ? readFileSync(personaPath, 'utf8') : '';
-    return { id: folder, dir, manifest: parsed.data, persona, error: null };
+    const knowledge = this.#knowledge(dir, parsed.data.knowledge);
+    if (typeof knowledge === 'string') return fail(knowledge);
+    return { id: folder, dir, manifest: parsed.data, persona, knowledge, error: null };
   }
 
   #personaPath(dir: string, relative: string): string | null {
     const base = resolve(dir);
     const path = resolve(base, relative);
     return path.startsWith(base + sep) ? path : null;
+  }
+
+  /**
+   * Lê os documentos de `knowledge`. O curinga "*" só vale no nome do arquivo ("knowledge/*.md").
+   * Devolve a mensagem de erro quando um caminho sai da pasta do agente ou o total passa do teto.
+   */
+  #knowledge(dir: string, patterns: string[]): KnowledgeDoc[] | string {
+    const docs: KnowledgeDoc[] = [];
+    const seen = new Set<string>();
+    for (const pattern of patterns) {
+      const target = this.#personaPath(dir, pattern);
+      if (!target) return `O caminho "${pattern}" de knowledge precisa ficar dentro da pasta do agente.`;
+      const folder = dirname(target), name = basename(target);
+      let files: string[];
+      if (name.includes('*')) {
+        const re = new RegExp(`^${name.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 'i');
+        files = existsSync(folder) ? readdirSync(folder).filter((f) => re.test(f)).sort().map((f) => join(folder, f)) : [];
+      } else {
+        if (!existsSync(target)) return `O arquivo "${pattern}" de knowledge não existe.`;
+        files = [target];
+      }
+      for (const file of files) {
+        if (seen.has(file) || !statSync(file).isFile()) continue;
+        seen.add(file);
+        docs.push({ name: file.slice(resolve(dir).length + 1).replace(/\\/g, '/'), content: readFileSync(file, 'utf8') });
+      }
+    }
+    const total = docs.reduce((n, d) => n + d.content.length, 0);
+    if (total > KNOWLEDGE_MAX_CHARS) {
+      return `A base de conhecimento tem ${total.toLocaleString('pt-BR')} caracteres e o teto é ${KNOWLEDGE_MAX_CHARS.toLocaleString('pt-BR')}. Tire ou resuma algum arquivo.`;
+    }
+    return docs;
   }
 }

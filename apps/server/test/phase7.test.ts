@@ -23,7 +23,7 @@ const hasGit = (() => { try { execFileSync('git', ['--version'], { stdio: 'ignor
 const ctx = { conversationId: 'main' };
 const toolsOf = (s: ReturnType<typeof setup>) => [
   ...renfieldTools({ tasks: s.shack.tasks, registry: s.shack.registry, mind: s.shack.mind, workspaces: s.shack.workspaces, account: s.shack.account }),
-  ...assistantTools({ calendar: s.shack.calendar, reminders: s.shack.reminders, timers: s.shack.timers, lists: s.shack.lists, notes: s.shack.notes, notifier: s.shack.notifier, timezone: 'America/Sao_Paulo' }),
+  ...assistantTools({ calendar: s.shack.calendar, reminders: s.shack.reminders, timers: s.shack.timers, lists: s.shack.lists, notes: s.shack.notes, habits: s.shack.habits, notifier: s.shack.notifier, timezone: 'America/Sao_Paulo' }),
 ];
 const toolOf = (s: ReturnType<typeof setup>, name: string) => toolsOf(s).find((t) => t.name === name)!;
 

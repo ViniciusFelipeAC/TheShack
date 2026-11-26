@@ -3,7 +3,7 @@ import type { AgentInfo } from '@shack/shared';
 import type { PoiKind, StationKind } from './layout.ts';
 import { hashSeed, rng, shade } from './pixel.ts';
 
-export type SceneAgentInput = Pick<AgentInfo, 'id' | 'name' | 'status' | 'currentTaskId' | 'chat' | 'appearance'>;
+export type SceneAgentInput = Pick<AgentInfo, 'id' | 'name' | 'status' | 'currentTaskId' | 'chat' | 'appearance'> & Partial<Pick<AgentInfo, 'currentTaskKind'>>;
 export type SceneState = 'idle' | 'working' | 'waiting' | 'error';
 
 /**
@@ -20,11 +20,20 @@ export function sceneStateOf(a: Pick<AgentInfo, 'status' | 'chat' | 'currentTask
 }
 
 export const stationKindOf = (appearance: Record<string, unknown>): StationKind =>
-  appearance.station === 'dual-monitor' ? 'dual' : 'single';
+  appearance.station === 'dual-monitor' ? 'dual' : appearance.station === 'typewriter' ? 'typewriter' : 'single';
 
-/** Ordem das mesas: agentes de chat primeiro, depois a ordem do servidor. */
-export function houseOrder<T extends Pick<AgentInfo, 'chat'>>(agents: T[]): T[] {
-  return [...agents.filter((a) => a.chat), ...agents.filter((a) => !a.chat)];
+const orderOf = (a: { appearance?: Record<string, unknown> }): number => {
+  const n = a.appearance?.order;
+  return typeof n === 'number' && Number.isFinite(n) ? n : Infinity;
+};
+
+/**
+ * Ordem das mesas: agentes de chat primeiro; depois quem tem `appearance.order`, do menor para o maior;
+ * por último os outros, na ordem do servidor (o nome da pasta). Com o número, ninguém troca de mesa quando chega alguém.
+ */
+export function houseOrder<T extends Pick<AgentInfo, 'chat'> & { appearance?: Record<string, unknown> }>(agents: T[]): T[] {
+  const rest = agents.map((a, i) => ({ a, i })).filter(({ a }) => !a.chat).sort((p, q) => orderOf(p.a) - orderOf(q.a) || p.i - q.i).map(({ a }) => a);
+  return [...agents.filter((a) => a.chat), ...rest];
 }
 
 const IDLE_KIND: Record<string, PoiKind> = {
@@ -42,9 +51,9 @@ export const prefersTea = (appearance: Record<string, unknown>): boolean =>
   Array.isArray(appearance.idle) && appearance.idle.includes('tea') && !appearance.idle.includes('coffee');
 
 export type Look = {
-  skin: string; hair: string; temples: string | null; hairStyle: 'neat' | 'messy';
+  skin: string; hair: string; temples: string | null; hairStyle: 'neat' | 'messy' | 'bun';
   outfit: string; sleeve: string; shirt: string; accent: string;
-  accessory: 'bowtie' | 'headphones' | 'none'; pants: string; shoes: string;
+  accessory: 'bowtie' | 'headphones' | 'glasses' | 'none'; pants: string; shoes: string;
 };
 
 const SKINS = ['#f1c9a5', '#e3b896', '#c08560', '#9c6644', '#6f4a33'];
@@ -64,12 +73,12 @@ export function lookOf(id: string, appearance: Record<string, unknown>): Look {
   const from = (list: string[]) => list[Math.floor(r() * list.length)];
   const skin = pick('skin') ?? from(SKINS), hair = pick('hair') ?? from(HAIRS);
   const outfit = pick('outfit') ?? from(OUTFITS), accent = pick('accent') ?? from(ACCENTS);
-  const accessory = appearance.accessory === 'bowtie' || appearance.accessory === 'headphones' ? appearance.accessory : 'none';
+  const accessory = appearance.accessory === 'bowtie' || appearance.accessory === 'headphones' || appearance.accessory === 'glasses' ? appearance.accessory : 'none';
   const sleeve = pick('sleeve') ?? (accessory === 'bowtie' ? '#d9d6cf' : outfit);
   return {
     skin, hair, outfit, accent, accessory, sleeve,
     temples: pick('temples'),
-    hairStyle: appearance.hair === 'messy' ? 'messy' : 'neat',
+    hairStyle: appearance.hair === 'messy' || appearance.hair === 'bun' ? appearance.hair : 'neat',
     shirt: pick('shirt') ?? sleeve,
     pants: pick('pants') ?? shade(outfit, -0.22),
     shoes: pick('shoes') ?? '#121317',

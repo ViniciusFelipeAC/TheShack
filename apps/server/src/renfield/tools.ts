@@ -1,4 +1,4 @@
-import type { Task } from '@shack/shared';
+import type { Attachment, Task } from '@shack/shared';
 import type { z } from 'zod';
 import { asExternal, cleanDeep, EXTERNAL_NOTICE } from '../core/external.ts';
 import type { TaskBus } from '../core/task-bus.ts';
@@ -34,7 +34,13 @@ const TASK_STATUS = oneOf(['queued', 'running', 'waiting_input', 'done', 'failed
   concluída: 'done', concluida: 'done', feita: 'done', falhou: 'failed', falha: 'failed', cancelada: 'cancelled', canceled: 'cancelled',
 });
 
-export function renfieldTools(d: { tasks: TaskBus; registry: Registry; mind: Mind; workspaces: Workspaces; account?: Account }): RenfieldTool[] {
+export type RenfieldToolDeps = {
+  tasks: TaskBus; registry: Registry; mind: Mind; workspaces: Workspaces; account?: Account;
+  /** Os anexos da mensagem mais recente do dono da casa que tem anexos, nesta conversa. */
+  recentAttachments?: (conversationId: string) => Attachment[];
+};
+
+export function renfieldTools(d: RenfieldToolDeps): RenfieldTool[] {
   /** Workspace pedido (id ou nome), ou o único cadastrado quando o agente exige um e não foi dito qual. */
   const pickWorkspace = (assignee: string, ref: unknown): string | undefined => {
     if (typeof ref === 'string' && ref.trim()) {
@@ -109,28 +115,36 @@ export function renfieldTools(d: { tasks: TaskBus; registry: Registry; mind: Min
     {
       name: 'tasks_create', group: 'tasks',
       description: 'Cria uma tarefa para outro agente. Use SOMENTE quando o dono da casa pedir explicitamente para delegar. '
-        + 'Para o etnaD, informe o workspace; se houver mais de um e não estiver claro qual, pergunte antes.',
+        + 'Para o etnaD, informe o workspace; se houver mais de um e não estiver claro qual, pergunte antes. '
+        + 'Para a Mina conferir uma entrega, passe review_of com o id da tarefa concluída. '
+        + 'Para o Harker (imagens do Instagram), o workspace é opcional: com ele, o Harker lê o projeto. Se o dono da casa anexou fotos para as imagens, passe attach_files=true.',
       shape: {
-        assignee: id().describe('id do agente, por exemplo "etnad"'),
+        assignee: id().describe('id do agente, por exemplo "etnad", "mina" ou "harker"'),
         title: text(200, 1).describe('título curto em português'),
         prompt: text(20_000, 1).describe('o pedido completo, com todo o contexto que o agente precisa'),
         workspace: text(200).optional().describe('nome ou id do workspace (obrigatório para o etnaD quando há mais de um)'),
+        review_of: id().optional().describe('só para a Mina: id da tarefa concluída que ela deve conferir'),
         priority: priority().optional(),
         quota_ok: bool().optional().describe('true só depois que o dono da casa confirmar que quer gastar a cota que resta'),
+        attach_files: bool().optional().describe('só para o Harker: true leva as fotos e arquivos da mensagem mais recente do dono da casa que tem anexos'),
       },
       run: (a, ctx) => {
         const assignee = String(a.assignee).toLowerCase();
         if (assignee === 'renfield') return 'Erro: tarefas são para os outros agentes. Responda você mesmo.';
+        const files = a.attach_files ? d.recentAttachments?.(ctx.conversationId) ?? [] : [];
+        if (a.attach_files && !files.length) return 'Erro: não achei anexos nas mensagens recentes desta conversa. Nada foi criado. Peça ao dono da casa para anexar as fotos.';
         const warning = a.quota_ok ? null : quotaWarning();
         if (warning) return out({ created: null, needsConfirmation: warning });
         const t = d.tasks.create(
           {
             assignee, title: String(a.title), prompt: String(a.prompt),
             workspaceId: pickWorkspace(assignee, a.workspace), priority: (a.priority as 'low' | 'normal' | 'high') ?? 'normal',
+            reviewOf: typeof a.review_of === 'string' && a.review_of ? a.review_of : undefined,
+            ...(files.length ? { attachmentIds: files.map((f) => f.id) } : {}),
           },
           { kind: 'agent', agentId: 'renfield', conversationId: ctx.conversationId },
         );
-        return out({ created: brief(t) });
+        return out({ created: brief(t), ...(files.length ? { attached: files.map((f) => f.name) } : {}) });
       },
     },
     {

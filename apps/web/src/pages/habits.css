@@ -1,0 +1,48 @@
+/* ---------- o Quadro: hábitos, um quadradinho por dia (Habits.tsx). Fora do styles.css, que já passa de 400 linhas. ---------- */
+.habits { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); min-width: 0; }
+.habits h3 { margin: 0; font-family: var(--font-brand); font-weight: 600; font-size: 24px; letter-spacing: 0.02em; }
+.habits p { margin: 0; }
+.habit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.habit { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 0; border-top: 1px solid var(--line); }
+.habit:last-child { padding-bottom: 0; }
+/* Nome e botões na mesma linha, o resumo embaixo: no celular o "Editar" não cai sozinho numa linha. */
+.habit-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 8px; row-gap: 2px; }
+.habit-name { overflow-wrap: anywhere; }
+.habit-stats { grid-column: 1 / -1; }
+.habit-today[aria-pressed="true"] { border-color: var(--hc); color: var(--hc); background: color-mix(in srgb, var(--hc) 16%, transparent); }
+
+/* Cores dos hábitos: tons que cabem na casa escura. */
+[data-hc] { --hc: var(--moss); }
+[data-hc="amber"] { --hc: var(--amber); }
+[data-hc="sky"] { --hc: #7db4d9; }
+[data-hc="rose"] { --hc: #e3909f; }
+[data-hc="violet"] { --hc: #b6a1dc; }
+[data-hc="sand"] { --hc: #d8c49e; }
+
+/* A grade: colunas de semanas, de domingo a sábado. No toque, quadradinhos maiores para o dedo acertar. */
+.hgrid-wrap { --cell: 11px; --gap: 3px; display: flex; gap: 6px; min-width: 0; }
+@media (pointer: coarse) { .hgrid-wrap { --cell: 14px; } }
+/* Os dias da semana descem a altura dos meses (14 + 4) e o respiro da rolagem (2). */
+.hgrid-wd { flex: none; display: grid; grid-template-rows: repeat(7, var(--cell)); gap: var(--gap); margin-top: 20px; font-size: 10px; line-height: var(--cell); color: var(--faint); }
+/* A borda esquerda esmaece: a coluna cortada pela rolagem não parece um risco, e fica claro que há mais para trás. */
+.hgrid-scroll { min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; padding: 2px 2px 6px; scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14px); mask-image: linear-gradient(to right, transparent, #000 14px); }
+.hgrid-months { display: grid; column-gap: var(--gap); height: 14px; margin-bottom: 4px; font-size: 10.5px; line-height: 14px; color: var(--muted); }
+.hgrid-months span { grid-row: 1; white-space: nowrap; }
+.hgrid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--cell)); grid-auto-columns: var(--cell); gap: var(--gap); width: max-content; }
+.hcell { width: var(--cell); height: var(--cell); padding: 0; border: 0; border-radius: 3px; background: rgba(255, 255, 255, 0.07); cursor: pointer; }
+.hcell[data-on] { background: var(--hc); }
+.hcell[data-today] { box-shadow: 0 0 0 1.5px var(--amber); }
+.hcell:focus-visible { outline-offset: 1px; }
+/* No iPhone o :hover gruda depois do toque; só no mouse. */
+@media (hover: hover) { .hcell:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45); } }
+.hcell[data-fresh] { animation: hfresh 2.6s ease-out; }
+@keyframes hfresh { 0%, 30% { box-shadow: 0 0 0 3px rgba(240, 176, 94, 0.7); } 100% { box-shadow: none; } }
+
+.habit-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch { width: 26px; height: 26px; padding: 0; border: 2px solid transparent; border-radius: 99px; background: var(--hc); cursor: pointer; }
+.swatch[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 2px var(--panel-2); }
+@media (pointer: coarse) { .swatch { width: 32px; height: 32px; } }
+
+@media (prefers-reduced-motion: reduce) { .hcell[data-fresh] { animation: none; } }

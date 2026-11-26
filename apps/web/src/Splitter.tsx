@@ -1,38 +1,33 @@
 import { type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from 'react';
-import { CHAT_WIDTH, clampChatWidth } from './chat-ui.ts';
+import { CHAT_WIDTH, clampChatWidth, halfChatWidth } from './chat-ui.ts';
 
-const KEY = 'shack.chatWidth';
 const STEP = 24;
 
-function loadWidth(): number {
-  try {
-    const v = Number(localStorage.getItem(KEY));
-    return clampChatWidth(v || CHAT_WIDTH.default, innerWidth);
-  } catch { return CHAT_WIDTH.default; }
-}
-const saveWidth = (w: number) => { try { localStorage.setItem(KEY, String(w)); } catch { /* sem armazenamento */ } };
-
-/** Largura do chat no computador. Cada aparelho guarda a sua: é preferência de tela, não dado da casa. */
+/**
+ * Largura do chat no computador. A Shack sempre abre com a casa e o chat em metades iguais,
+ * a pedido do usuário: o arraste vale até fechar a janela e não fica guardado.
+ * Enquanto ninguém arrasta, a metade acompanha o tamanho da janela.
+ */
 export function useChatWidth() {
-  const [width, setWidth] = useState(loadWidth);
+  const [viewport, setViewport] = useState(innerWidth);
+  // null = metade da janela.
+  const [chosen, setChosen] = useState<number | null>(null);
   useEffect(() => {
-    const onResize = () => setWidth((w) => clampChatWidth(w, innerWidth));
+    const onResize = () => setViewport(innerWidth);
     addEventListener('resize', onResize);
     return () => removeEventListener('resize', onResize);
   }, []);
-  const change = (w: number, persist = true) => {
-    const next = clampChatWidth(w, innerWidth);
-    setWidth(next);
-    if (persist) saveWidth(next);
-  };
+  const width = chosen === null ? halfChatWidth(viewport) : clampChatWidth(chosen, viewport);
+  const change = (w: number | null) => setChosen(w === null ? null : clampChatWidth(w, innerWidth));
   return [width, change] as const;
 }
 
 /**
  * Divisor entre a casa e o chat, como o do VS Code: arraste para mudar a largura,
- * dois cliques para voltar ao padrão, setas do teclado para ajustar. Só existe no computador.
+ * dois cliques para voltar à metade, setas do teclado para ajustar. Só existe no computador.
+ * `onChange(null)` volta à metade.
  */
-export function Splitter({ width, onChange }: { width: number; onChange(width: number, persist?: boolean): void }) {
+export function Splitter({ width, onChange }: { width: number; onChange(width: number | null): void }) {
   const drag = useRef<{ x: number; width: number; last: number; id: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -49,30 +44,30 @@ export function Splitter({ width, onChange }: { width: number; onChange(width: n
     const d = drag.current;
     if (!d || e.pointerId !== d.id) return;
     d.last = d.width + (d.x - e.clientX);
-    onChange(d.last, false);
+    onChange(d.last);
   };
-  // Soltar, cancelar ou perder o ponteiro (trocar de janela no meio) grava a última largura vista.
+  // Soltar, cancelar ou perder o ponteiro (trocar de janela no meio) encerra o arraste. A largura já veio
+  // do move; um clique sem arraste não a fixa, e a metade continua acompanhando a janela.
   const up = (e: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d || e.pointerId !== d.id) return;
     drag.current = null;
     setDragging(false);
     document.documentElement.classList.remove('resizing');
-    onChange(d.last);
   };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     const by: Record<string, number> = { ArrowLeft: STEP, ArrowRight: -STEP };
-    if (e.key in by) { e.preventDefault(); onChange(width + by[e.key]!); } else if (e.key === 'Home') { e.preventDefault(); onChange(CHAT_WIDTH.default); }
+    if (e.key in by) { e.preventDefault(); onChange(width + by[e.key]!); } else if (e.key === 'Home') { e.preventDefault(); onChange(null); }
   };
 
   return (
     <div
       className="splitter" role="separator" aria-orientation="vertical" tabIndex={0}
       aria-label="Largura do chat" aria-valuenow={width} aria-valuemin={CHAT_WIDTH.min} aria-valuemax={CHAT_WIDTH.max}
-      title="Arraste para mudar a largura do chat. Dois cliques voltam ao padrão."
+      title="Arraste para mudar a largura do chat. Dois cliques voltam à metade."
       data-dragging={dragging || undefined}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up}
-      onDoubleClick={() => onChange(CHAT_WIDTH.default)} onKeyDown={key}
+      onDoubleClick={() => onChange(null)} onKeyDown={key}
     />
   );
 }

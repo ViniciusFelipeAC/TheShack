@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Approval, Attachment, ChatMessage, ChatStyle, Conversation, Decision, Task } from '@shack/shared';
+import { type Approval, type Attachment, type ChatMessage, type ChatStyle, type Conversation, type Decision, named, type Task } from '@shack/shared';
 import type { AgentSettingsStore } from '../core/agent-settings.ts';
 import type { Approvals } from '../core/approvals.ts';
 import type { EventBus } from '../core/events.ts';
@@ -94,8 +94,8 @@ export class ChatService {
       this.#o.approvals.resolve(pending.approval.id, pending.decision, undefined, deviceId);
       // Se a aprovação era do próprio Renfield, a resposta vem da vez dele que estava esperando.
       if (pending.approval.agentId === this.agentId) return { message, reply: null };
-      const name = this.#o.registry.get(pending.approval.agentId)?.manifest?.name ?? pending.approval.agentId;
-      const text = pending.decision === 'approve' ? `Perfeitamente. Autorizei o pedido do ${name}.` : `Entendido. Neguei o pedido do ${name}.`;
+      const of = this.#who(pending.approval.agentId, 'do');
+      const text = pending.decision === 'approve' ? `Perfeitamente. Autorizei o pedido ${of}.` : `Entendido. Neguei o pedido ${of}.`;
       return { message, reply: Promise.resolve(this.#add({ conversationId, role: 'assistant', kind: 'text', text, style, taskId: null, deviceId: null })) };
     }
     return { message, reply: this.#enqueue(conv.id, () => this.#turn(conv, text, style, message.attachments)) };
@@ -160,7 +160,7 @@ export class ChatService {
   /** Avisos escritos pelo servidor, sem gastar cota: tarefa concluída, com falha ou esperando você. */
   #notice(type: 'task.done' | 'task.failed' | 'task.waiting_input', task: Task): void {
     if (task.assignee === this.agentId) return;
-    const name = this.#o.registry.get(task.assignee)?.manifest?.name ?? task.assignee;
+    const who = this.#who(task.assignee), Who = this.#who(task.assignee, 'o', true);
     // O aviso vai para a conversa aberta, onde você está olhando, mesmo que o pedido tenha nascido em outra.
     // Ele é escrito pelo servidor e não entra na sessão do Renfield, então nada se perde.
     const conversationId = this.#o.repo.currentId();
@@ -171,22 +171,38 @@ export class ChatService {
       // A conferência do servidor vem antes do relatório: o relatório é a palavra do agente, o git é o fato.
       const v = r?.verification;
       const head = v?.status === 'suspect'
-        ? `Atenção: o ${name} disse que concluiu "${task.title}", mas o resultado é suspeito. ${v.reason}`
-        : `O ${name} concluiu "${task.title}".${v?.status === 'unverified' ? ` Não deu para conferir no git: ${v.reason}` : ''}`;
-      text = [head, r?.summary, changes, v?.diffstat ? `No git: ${v.diffstat}.` : null, r?.howToTest ? `Como verificar: ${r.howToTest}` : null, r?.notes]
+        ? `Atenção: ${who} disse que concluiu "${task.title}", mas o resultado é suspeito. ${v.reason}`
+        : `${Who} concluiu "${task.title}".${v?.status === 'unverified' ? ` Não deu para conferir no git: ${v.reason}` : ''}`;
+      // Conferência da Mina: o veredito e o que ficou pendente. Prompt pronto: onde ele está.
+      const pendingItems = r?.review?.items.filter((i) => i.status !== 'met') ?? [];
+      const review = r?.review
+        ? r.review.verdict === 'pass' ? 'Conferência: tudo o que foi pedido foi atendido.'
+          : `Conferência: ${pendingItems.length} pendência(s).\n${pendingItems.slice(0, 6).map((i) => `• ${i.requirement} (${i.status === 'missing' ? 'faltou' : 'parcial'})`).join('\n')}`
+        : null;
+      // Imagens do Harker: quantas e onde estão. A legenda fica no painel, junto delas.
+      const n = r?.images?.length ?? 0;
+      const ready = n ? `${n === 1 ? 'A imagem está pronta' : `As ${n} imagens estão prontas`} no painel ${this.#who(task.assignee, 'do')}, com os botões para salvar, copiar a legenda e ajustar.`
+        : r?.output ? `O texto pronto está no painel ${this.#who(task.assignee, 'do')}, com os botões para copiar e mandar.` : null;
+      text = [head, r?.summary, review, changes, v?.diffstat ? `No git: ${v.diffstat}.` : null, r?.howToTest ? `Como verificar: ${r.howToTest}` : null, r?.notes, ready]
         .filter(Boolean).join('\n');
     } else if (type === 'task.failed') {
-      text = [`Lamento: o ${name} não conseguiu concluir "${task.title}". ${task.error ?? ''}`.trim(),
+      text = [`Lamento: ${who} não conseguiu concluir "${task.title}". ${task.error ?? ''}`.trim(),
         task.handoff ? 'Ficou uma nota de passagem com o que foi feito e o que falta; ela segue para a próxima tentativa.' : null]
         .filter(Boolean).join('\n');
     } else {
       const pending = this.#o.approvals.pending(task.id)[0];
       const ask = pending?.summary ?? 'há uma pergunta pendente.';
       text = pending?.kind === 'question'
-        ? `O ${name} tem uma pergunta sobre "${task.title}": ${ask}${pending.options?.length ? `\nOpções: ${pending.options.join(', ')}.` : ''}\nResponda aqui que eu repasso, ou use o cartão.`
-        : `O ${name} precisa de você em "${task.title}": ${ask}\nResponda "sim" ou "não", ou use os botões.`;
+        ? `${Who} tem uma pergunta sobre "${task.title}": ${ask}${pending.options?.length ? `\nOpções: ${pending.options.join(', ')}.` : ''}\nResponda aqui que eu repasso, ou use o cartão.`
+        : `${Who} precisa de você em "${task.title}": ${ask}\nResponda "sim" ou "não", ou use os botões.`;
     }
     this.#add({ conversationId, role: 'assistant', kind: 'task_notice', text, style: null, taskId: task.id, deviceId: null });
+  }
+
+  /** O nome do agente com o artigo certo: "o etnaD", "a Mina", "do etnaD", "da Mina". */
+  #who(agentId: string, form: 'o' | 'do' = 'o', capital = false): string {
+    const m = this.#o.registry.get(agentId)?.manifest;
+    return named(m?.name ?? agentId, m?.article ?? 'o', form, capital);
   }
 
   /** Lê os arquivos dos anexos. Um arquivo que sumiu do disco vira um aviso em vez de derrubar a resposta. */

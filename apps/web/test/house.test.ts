@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BASE_W, findPath, planHouse, type StationKind, T, WING_W } from '../src/scene/layout.ts';
-import { houseOrder, idleKinds, lookOf, sceneStateOf } from '../src/scene/model.ts';
+import { houseOrder, idleKinds, lookOf, sceneStateOf, stationKindOf } from '../src/scene/model.ts';
 
 const DOOR = { x: 9, y: 11 };
 const agents = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `a${i}`, kind: (i % 2 ? 'dual' : 'single') as StationKind }));
@@ -100,4 +100,34 @@ test('o rack da TV ocupa o pé do tapete sem fechar o caminho até o sofá e a l
   }
   // quem levanta do sofá fica entre o sofá e a TV
   for (const x of [13, 14]) assert.equal(L.blocked[10][x], false);
+});
+
+test('a Mina abre a ala com a escrivaninha: a folha é a "tela", sem moldura nem LED', () => {
+  const L = planHouse([{ id: 'renfield', kind: 'single' }, { id: 'etnad', kind: 'dual' }, { id: 'mina', kind: 'typewriter' }]);
+  assert.equal(L.wings, 1);
+  const d = L.desks.mina;
+  assert.equal(d.kind, 'typewriter');
+  assert.equal(d.room, 1);
+  assert.equal(d.screens.length, 1);
+  assert.equal(d.bezels.length, 0);
+  assert.ok(reachable(L.blocked, DOOR, d.seatTile), 'ela chega na escrivaninha a partir da porta');
+  for (const p of L.pois) assert.ok(reachable(L.blocked, d.standTile, p.tile), 'e de lá chega em ' + p.id);
+  assert.equal(stationKindOf({ station: 'typewriter' }), 'typewriter');
+  assert.equal(stationKindOf({ station: 'cavalete-inventado' }), 'single', 'valor desconhecido vira a mesa de um monitor');
+});
+
+test('appearance.order fixa as mesas: a Mina não troca de lugar quando chega outro agente', () => {
+  const a = (id: string, chat = false, order?: number) => ({ id, chat, appearance: order === undefined ? {} : { order } });
+  const before = houseOrder([a('etnad', false, 1), a('mina', false, 2), a('renfield', true)]).map((x) => x.id);
+  const after = houseOrder([a('etnad', false, 1), a('harker', false, 3), a('mina', false, 2), a('renfield', true), a('zeta')]).map((x) => x.id);
+  assert.deepEqual(before, ['renfield', 'etnad', 'mina']);
+  assert.deepEqual(after, ['renfield', 'etnad', 'mina', 'harker', 'zeta']);
+  assert.equal(before.indexOf('mina'), after.indexOf('mina'));
+});
+
+test('coque e óculos vêm do manifesto', () => {
+  const mina = lookOf('mina', { hair: 'bun', accessory: 'glasses' });
+  assert.equal(mina.hairStyle, 'bun');
+  assert.equal(mina.accessory, 'glasses');
+  assert.equal(lookOf('x', { hair: 'moicano' }).hairStyle, 'neat');
 });

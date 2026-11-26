@@ -1,0 +1,35 @@
+/* O canto da casa: a hora e o uso do plano. Tocar abre o detalhe, com a hora em que cada janela renova. */
+.usage-wrap { position: relative; min-width: 0; }
+button.brand-box { display: block; text-align: left; font: inherit; color: inherit; cursor: pointer; max-width: 100%; }
+button.brand-box:hover { background: var(--glass-strong); }
+button.brand-box[aria-expanded="true"] { border-color: rgba(240, 176, 94, 0.55); }
+.brand-box > .usage-mini { display: flex; flex-wrap: nowrap; gap: 10px; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.um { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.um .qbar { width: 30px; }
+.um[data-state="allowed_warning"] .qbar > span, .uw[data-state="allowed_warning"] .qbar > span { background: var(--amber); }
+.um[data-state="allowed_warning"] .um-pct, .uw[data-state="allowed_warning"] .um-pct { color: var(--amber); }
+.um[data-state="rejected"] .qbar > span, .uw[data-state="rejected"] .qbar > span { background: var(--danger); }
+.um[data-state="rejected"] .um-pct, .uw[data-state="rejected"] .um-pct { color: var(--danger); }
+
+.usage-pop { position: absolute; top: calc(100% + 6px); left: 0; width: min(340px, calc(100vw - 40px)); max-height: 70vh; overflow: auto; padding: 12px 14px; z-index: 9; display: flex; flex-direction: column; gap: 8px;
+  /* Quase opaco: com o vidro de sempre, a cena aparecia por trás das letras pequenas. */
+  background: rgba(10, 14, 15, 0.97); }
+.usage-pop h4 { margin: 2px 0 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.usage-pop p { margin: 0; }
+.uw { display: flex; flex-direction: column; gap: 4px; }
+.uw .um-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
+.qbar.wide { width: 100%; height: 6px; }
+.utable { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.utable th, .utable td { padding: 5px 0; text-align: right; border-bottom: 1px solid var(--line); }
+.utable thead th { color: var(--muted); font-size: 12px; font-weight: 600; }
+.utable th:first-child { text-align: left; font-weight: 600; }
+.warn-text { color: var(--amber); }
+
+/* Celular: os dois medidores um embaixo do outro, e o painel ocupa a largura da tela. */
+@media (max-width: 899px) {
+  .brand-box > .usage-mini { flex-direction: column; gap: 1px; margin-top: 2px; font-size: 11.5px; }
+  .um .qbar { width: 22px; }
+  .usage-pop { position: fixed; top: calc(max(12px, env(safe-area-inset-top, 0px)) + 84px); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); width: auto; max-height: 62vh; }
+}
+/* Tela estreita: o nome da casa sai do canto para caberem a hora, o uso e os três botões. */
+@media (max-width: 520px) { button.brand-box b { display: none; } }

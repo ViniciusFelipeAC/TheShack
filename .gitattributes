@@ -2,3 +2,6 @@
 * text=auto eol=lf
 *.png binary
 *.ico binary
+# As fontes e o PDF das skills do Harker (plugins/shack); converter fim de linha neles os corromperia.
+*.ttf binary
+*.pdf binary

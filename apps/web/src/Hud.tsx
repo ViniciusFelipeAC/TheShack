@@ -1,8 +1,9 @@
-import type { AgentInfo, QuotaStatus } from '@shack/shared';
+import type { AccountStatus, AgentInfo, QuotaStatus } from '@shack/shared';
 import { useEffect, useRef, useState } from 'react';
 import { nowText, STATUS_TEXT } from './AgentPanel.tsx';
 import type { Connection } from './live.ts';
 import { Portrait } from './Portrait.tsx';
+import { UsageMini, UsagePanel } from './UsagePanel.tsx';
 import type { MapName, Weather } from './scene/engine.ts';
 
 export type Section = 'quadro' | 'agenda' | 'lembretes' | 'listas' | 'notas';
@@ -29,7 +30,11 @@ type TopBarProps = {
   weather: Weather;
   map: MapName;
   unread: number;
-  quota: QuotaStatus | null;
+  /** A conta, com as janelas do plano para o medidor do canto. */
+  account: AccountStatus | null;
+  agents: AgentInfo[];
+  /** Consulta o uso do plano de novo (o servidor faz no máximo uma consulta por minuto). */
+  onUsageRefresh(): Promise<void>;
   /** Memórias e regras novas que você ainda não revisou. */
   toReview: number;
   onToggleMap(): void;
@@ -41,31 +46,47 @@ type TopBarProps = {
   onLogout(): void;
 };
 
-/** Barra de cima: nome, hora de São Paulo, conexão e as ações da casa. */
-export function TopBar(p: TopBarProps) {
-  const now = useClock();
-  const [menu, setMenu] = useState(false);
+/** Fecha um popup ao tocar fora dele ou apertar Esc. */
+function useDismiss(open: boolean, close: () => void) {
   const box = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!menu) return;
-    const onDoc = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setMenu(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(false); };
+    if (!open) return;
+    const onDoc = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     document.addEventListener('pointerdown', onDoc);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('pointerdown', onDoc); document.removeEventListener('keydown', onKey); };
-  }, [menu]);
+  }, [open]);
+  return box;
+}
+
+/** Barra de cima: nome, hora de São Paulo, conexão, o uso do plano e as ações da casa. */
+export function TopBar(p: TopBarProps) {
+  const now = useClock();
+  const [menu, setMenu] = useState(false);
+  const [usage, setUsage] = useState(false);
+  const box = useDismiss(menu, () => setMenu(false));
+  const usageBox = useDismiss(usage, () => setUsage(false));
   const pick = (fn: () => void) => () => { setMenu(false); fn(); };
+  const openUsage = () => {
+    setUsage((u) => !u);
+    // Abrir o painel pede o número mais novo; o servidor devolve o guardado se a última consulta tem menos de um minuto.
+    if (!usage) void p.onUsageRefresh();
+  };
 
   return (
     <header className="topbar">
-      <div className="brand-box glass">
-        <b>THE SHACK</b>
-        <span>
-          <i className={`dot ${p.connection}`} title={CONNECTION_TEXT[p.connection]} aria-label={CONNECTION_TEXT[p.connection]} />
-          {now}<span className="long"> · {WEATHER_TEXT[p.weather]} · São Paulo</span>
-          {p.mode && <span className="mode-pill">Modo {p.mode}</span>}
-          <QuotaMeter quota={p.quota} />
-        </span>
+      <div className="usage-wrap" ref={usageBox}>
+        <button className="brand-box glass" type="button" aria-expanded={usage} aria-haspopup="dialog" onClick={openUsage} title="Uso do plano e quando renova">
+          <b>THE SHACK</b>
+          <span>
+            <i className={`dot ${p.connection}`} title={CONNECTION_TEXT[p.connection]} aria-label={CONNECTION_TEXT[p.connection]} />
+            {now}<span className="long"> · {WEATHER_TEXT[p.weather]} · São Paulo</span>
+            {p.mode && <span className="mode-pill">Modo {p.mode}</span>}
+          </span>
+          <UsageMini account={p.account} />
+        </button>
+        {usage && <UsagePanel account={p.account} agents={p.agents} onRefresh={p.onUsageRefresh} />}
       </div>
       <div className="actions" ref={box}>
         <button className="tbtn" type="button" onClick={p.onToggleMap}>

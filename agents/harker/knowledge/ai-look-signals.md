@@ -1,6 +1,6 @@
 # O que faz um site parecer feito por IA
 
-Transcrito do PDF que o dono da casa mandou em 2026-11-02 (autor: @Vinicius). É a primeira base de conhecimento do agente de prompts; na Fase 8 ela vai para `agents/<id>/knowledge/`.
+Transcrito do PDF que o dono da casa mandou em 2026-11-02 (autor: @Vinicius). É a primeira base de conhecimento da Mina, o agente de prompts e conferência (Fase 9).
 
 Um site parece feito por IA quando acumula vários padrões "médios" ao mesmo tempo: fonte Inter, gradiente roxo, hero centralizado com três cards e texto genérico. O fenômeno já tem nome: "AI slop" ou design "vibe-coded".
 

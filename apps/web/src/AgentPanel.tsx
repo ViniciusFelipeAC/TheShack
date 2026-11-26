@@ -1,9 +1,10 @@
-import type { AccountStatus, AgentInfo, Approval, ShackEvent, Task, TaskDetail } from '@shack/shared';
+import { type AccountStatus, type AgentInfo, type Approval, named, pronoun, type ShackEvent, type Task, type TaskDetail } from '@shack/shared';
 import { useEffect, useState } from 'react';
 import { AgentModel } from './AgentModel.tsx';
 import { api } from './live.ts';
 import { ApprovalCard } from './pages/Chat.tsx';
 import { Portrait } from './Portrait.tsx';
+import { TaskReport } from './TaskReport.tsx';
 
 export const STATUS_TEXT: Record<AgentInfo['status'], string> = {
   idle: 'Ocioso', working: 'Trabalhando', waiting_input: 'Precisa de você', error: 'Com erro', disabled: 'Desativado',
@@ -48,6 +49,8 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
   const [steps, setSteps] = useState<string[]>([]);
   const [queue, setQueue] = useState<Task[]>([]);
   const [recent, setRecent] = useState<Task[] | null>(null);
+  /** Conferências da Mina para as entregas deste agente, pela tarefa conferida. */
+  const [reviews, setReviews] = useState<Record<string, Task>>({});
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -60,6 +63,8 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
           api<{ items: Task[] }>(`/tasks?assignee=${a.id}&status=queued&limit=10`),
           api<{ items: Task[] }>(`/tasks?assignee=${a.id}&limit=15`),
         ]);
+        const reviewer = a.runner === 'code' ? agents.find((x) => x.runner === 'text') : undefined;
+        const rv = reviewer ? await api<{ items: Task[] }>(`/tasks?assignee=${reviewer.id}&limit=40`).catch(() => ({ items: [] as Task[] })) : { items: [] as Task[] };
         const id = a.currentTaskId;
         const [cur, ev]: [TaskDetail | null, ShackEvent[]] = id
           ? await Promise.all([api<TaskDetail>(`/tasks/${id}`), api<ShackEvent[]>(`/tasks/${id}/events`)])
@@ -68,10 +73,13 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
         setQueue(q.items.reverse());
         setRecent(r.items.filter((t) => t.status === 'done' || t.status === 'failed' || t.status === 'cancelled').slice(0, 5));
         setCurrent(cur);
+        // a mais nova de cada entrega fica por cima: a lista vem das mais novas para as mais antigas
+        setReviews(Object.fromEntries(rv.items.filter((x) => x.reviewOf).reverse().map((x) => [x.reviewOf!, x])));
         setSteps(ev.filter((e) => e.type === 'task.progress').map((e) => String((e.data as { message?: unknown }).message ?? '')).filter(Boolean).slice(-5));
       } catch { /* o painel mostra o que já tinha */ }
     }, version === 0 ? 0 : 500);
     return () => { alive = false; clearTimeout(timer); };
+    // A lista de agentes muda a cada passo de qualquer um; buscar de novo só quando muda este agente ou a tarefa dele.
   }, [a.id, a.currentTaskId, version]);
 
   useEffect(() => { setConfirmCancel(false); }, [a.currentTaskId]);
@@ -83,6 +91,7 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
     setConfirmCancel(false);
   };
   const nameOf = (id?: string) => agents.find((x) => x.id === id)?.name ?? id ?? '';
+  const who = (form: 'o' | 'ao' = 'o', capital = false) => named(a.name, a.article, form, capital);
   const origin = (t: Task) => (t.origin.kind === 'agent' ? `Pedida por ${nameOf(t.origin.agentId)}` : t.origin.kind === 'schedule' ? 'Agendada' : 'Pedida por você');
   const mine = approvals.filter((p) => p.agentId === a.id);
 
@@ -104,11 +113,12 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
       <div className="box warn">
         <h4>Confira o resultado</h4>
         <p className="strong">{current.title}</p>
-        <p>O {a.name} disse que concluiu, mas o git não confirma. {v.reason}</p>
-        {v.files.length > 0 && <p className="meta">Mudou de verdade: {v.files.slice(0, 6).join(', ')}{v.files.length > 6 ? ` e mais ${v.files.length - 6}` : ''}</p>}
+        {/* O etnaD é conferido pelo git; o Harker, pelas imagens em disco. */}
+        <p>{who('o', true)} disse que concluiu, mas {a.runner === 'design' ? 'os arquivos não confirmam' : 'o git não confirma'}. {v.reason}</p>
+        {v.files.length > 0 && <p className="meta">{a.runner === 'design' ? 'Imagens em disco' : 'Mudou de verdade'}: {v.files.slice(0, 6).join(', ')}{v.files.length > 6 ? ` e mais ${v.files.length - 6}` : ''}</p>}
         <p className="meta">O relatório dizia: {current.result.summary}</p>
         <div className="row wrap">
-          <button className="btn primary" type="button" onClick={() => onAsk(`Revise com o ${a.name} a tarefa "${current.title}": o resultado ficou suspeito. `)}>Pedir ao Renfield</button>
+          <button className="btn primary" type="button" onClick={() => onAsk(`Revise com ${who()} a tarefa "${current.title}": o resultado ficou suspeito. `)}>Pedir ao Renfield</button>
           <button className="btn" type="button" disabled={busy} onClick={() => act(`/agents/${a.id}/clear-error`)}>Já conferi</button>
         </div>
       </div>
@@ -148,8 +158,8 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
     main = (
       <div className="box">
         <h4>Sem tarefa agora</h4>
-        <p>{a.chat ? `O ${a.name} está à disposição. Fale com ele no chat.` : `Para dar trabalho ao ${a.name}, peça ao Renfield no chat.`}</p>
-        <div className="row"><button className="btn" type="button" onClick={() => onAsk(a.chat ? '' : `Peça ao ${a.name} para `)}>{a.chat ? 'Ir para o chat' : 'Pedir algo'}</button></div>
+        <p>{a.chat ? `${who('o', true)} está à disposição. Fale com ${pronoun(a.article)} no chat.` : `Para dar trabalho ${who('ao')}, peça ao Renfield no chat.`}</p>
+        <div className="row"><button className="btn" type="button" onClick={() => onAsk(a.chat ? '' : `Peça ${who('ao')} para `)}>{a.chat ? 'Ir para o chat' : 'Pedir algo'}</button></div>
       </div>
     );
   }
@@ -181,17 +191,7 @@ export function AgentPanel({ agent: a, agents, sceneActivity, approvals, account
                 </span>
               </div>
               <span className="meta">{when(t.finishedAt ?? t.createdAt)}{tokens(t) ? ` · ${tokens(t)}` : ''}</span>
-              {t.result && (
-                <details>
-                  <summary>Relatório</summary>
-                  <p>{t.result.summary}</p>
-                  {t.result.changes.length > 0 && <ul className="dlist">{t.result.changes.map((c) => <li key={c.path}><code>{c.path}</code> {c.what}</li>)}</ul>}
-                  {t.result.howToTest && <p className="meta">Como testar: {t.result.howToTest}</p>}
-                  {t.result.verification && (
-                    <p className="meta">Conferência ({VERIFY_TEXT[t.result.verification.status]}): {t.result.verification.reason}{t.result.verification.diffstat ? ` · ${t.result.verification.diffstat}` : ''}</p>
-                  )}
-                </details>
-              )}
+              {t.result && <TaskReport task={t} agents={agents} review={reviews[t.id] ?? null} />}
               {t.handoff && (
                 <details>
                   <summary>Nota de passagem</summary>

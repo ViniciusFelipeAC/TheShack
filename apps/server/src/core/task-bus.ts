@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  AgentInfo, ApprovalKind, CreateTaskInput, Decision, EventType, Task, TaskDetail, TaskOrigin, TaskResult, TaskStatus,
+import {
+  type AgentInfo, type ApprovalKind, type ArticleForm, type CreateTaskInput, type Decision, type EventType, named, pronoun, runnerOf,
+  type Task, type TaskDetail, type TaskOrigin, type TaskResult, type TaskStatus,
 } from '@shack/shared';
 import { type Db, now, tx } from '../db/database.ts';
 import type { TaskPatch, TasksRepo } from '../db/repos.ts';
@@ -63,6 +64,8 @@ export type TaskBusOptions = {
   /** Modelo e esforço trocados no app. Sem ele, vale só o agent.yaml. */
   agentSettings?: AgentSettingsStore;
   workspaceExists?: (id: string) => boolean;
+  /** Copia os anexos de uma tarefa nova para a pasta dela. Lança erro (400) se um anexo não existe. */
+  stageAttachments?: (taskId: string, attachmentIds: string[]) => void;
   progressThrottleMs?: number;
 };
 
@@ -75,6 +78,7 @@ export class TaskBus {
   #runnerFor: (agent: AgentDef) => AgentRunner | null;
   #settings: AgentSettingsStore | null;
   #workspaceExists: (id: string) => boolean;
+  #stage: ((taskId: string, attachmentIds: string[]) => void) | null;
   #throttleMs: number;
   #live = new Map<string, Live>();
   #activity = new Map<string, string>();
@@ -91,6 +95,7 @@ export class TaskBus {
     this.#runnerFor = o.runnerFor;
     this.#settings = o.agentSettings ?? null;
     this.#workspaceExists = o.workspaceExists ?? (() => true);
+    this.#stage = o.stageAttachments ?? null;
     this.#throttleMs = o.progressThrottleMs ?? 500;
   }
 
@@ -100,18 +105,29 @@ export class TaskBus {
     const agent = this.#registry.get(input.assignee);
     if (!agent) throw new HttpError(400, 'unknown_agent', `Não existe agente "${input.assignee}".`);
     if (!agent.manifest) throw new HttpError(409, 'agent_disabled', `O agente "${agent.id}" está desativado: ${agent.error}`);
-    if (!this.#runnerFor(agent)) throw new HttpError(409, 'agent_cannot_run', `O ${agent.manifest.name} não executa tarefas. Converse com ele pelo chat.`);
+    const who = (form: ArticleForm = 'o') => named(agent.manifest!.name, agent.manifest!.article, form, form === 'o');
+    if (!this.#runnerFor(agent)) throw new HttpError(409, 'agent_cannot_run', `${who()} não executa tarefas. Converse com ${pronoun(agent.manifest.article)} pelo chat.`);
     if (input.parentId && !this.#repo.get(input.parentId)) throw badRequest('A tarefa indicada em parentId não existe.');
+    if (input.reviewOf) {
+      const reviewed = this.#repo.get(input.reviewOf);
+      if (!reviewed) throw badRequest('A tarefa indicada em reviewOf não existe.');
+      if (runnerOf(agent.manifest) !== 'text') throw new HttpError(409, 'agent_cannot_review', `${who()} não confere tarefas.`);
+      if (reviewed.status !== 'done') throw conflict('Só dá para conferir uma tarefa concluída.');
+    }
     if (input.workspaceId && !this.#workspaceExists(input.workspaceId)) throw new HttpError(400, 'unknown_workspace', 'Esse workspace não existe.');
     if (agent.manifest.workspace === 'required' && !input.workspaceId) {
-      throw new HttpError(400, 'workspace_required', `O ${agent.manifest.name} precisa de um workspace. Cadastre uma pasta de projeto e informe workspaceId.`);
+      throw new HttpError(400, 'workspace_required', `${who()} precisa de um workspace. Cadastre uma pasta de projeto e informe workspaceId.`);
     }
+    const attachmentIds = input.attachmentIds ?? [];
+    if (attachmentIds.length && (runnerOf(agent.manifest) !== 'design' || !this.#stage)) throw badRequest(`${who()} não recebe anexos em tarefas.`);
 
     const task: Task = {
       id: randomUUID(), title: input.title, prompt: input.prompt, assignee: agent.id, origin,
       status: 'queued', priority: input.priority, workspaceId: input.workspaceId ?? null, parentId: input.parentId ?? null,
-      sessionId: null, model: null, result: null, error: null, usage: null, handoff: null, createdAt: now(), startedAt: null, finishedAt: null,
+      reviewOf: input.reviewOf ?? null, sessionId: null, model: null, result: null, error: null, usage: null, handoff: null, createdAt: now(), startedAt: null, finishedAt: null,
     };
+    // Na criação, e não na execução: um anexo solto some em 24 horas, e a tarefa pode esperar mais que isso na fila.
+    if (attachmentIds.length) this.#stage!(task.id, attachmentIds);
     tx(this.#db, () => {
       this.#repo.insert(task);
       this.#repo.addHistory(task.id, 'queued', null, task.createdAt);
@@ -211,30 +227,31 @@ export class TaskBus {
   agentInfo(def: AgentDef): AgentInfo {
     const m = def.manifest;
     const base = {
-      id: def.id, name: m?.name ?? def.id, role: m?.role ?? '', models: m ? [m.model].flat() : [],
+      id: def.id, name: m?.name ?? def.id, role: m?.role ?? '', article: m?.article ?? 'o', models: m ? [m.model].flat() : [],
       effort: m?.effort ?? 'medium', settings: this.#settings?.get(def.id) ?? { model: null, effort: null },
-      chat: m?.chat ?? false, manifestError: def.error, appearance: m?.appearance ?? {},
+      chat: m?.chat ?? false, runner: m ? runnerOf(m) : 'none' as const, manifestError: def.error, appearance: m?.appearance ?? {},
     };
-    if (!m) return { ...base, status: 'disabled', activity: def.error, currentTaskId: null };
+    const kind = (t: Task) => (t.reviewOf ? 'review' as const : 'task' as const);
+    if (!m) return { ...base, status: 'disabled', activity: def.error, currentTaskId: null, currentTaskKind: null };
 
     const active = this.#repo.active(def.id);
     const waiting = active.find((t) => t.status === 'waiting_input');
-    if (waiting) return { ...base, status: 'waiting_input', activity: this.#activity.get(def.id) ?? waiting.title, currentTaskId: waiting.id };
+    if (waiting) return { ...base, status: 'waiting_input', activity: this.#activity.get(def.id) ?? waiting.title, currentTaskId: waiting.id, currentTaskKind: kind(waiting) };
     const running = active.find((t) => t.status === 'running');
-    if (running) return { ...base, status: 'working', activity: this.#activity.get(def.id) ?? running.title, currentTaskId: running.id };
+    if (running) return { ...base, status: 'working', activity: this.#activity.get(def.id) ?? running.title, currentTaskId: running.id, currentTaskKind: kind(running) };
     const chat = this.#chatActivity.get(def.id);
-    if (chat) return { ...base, status: 'working', activity: chat, currentTaskId: null };
+    if (chat) return { ...base, status: 'working', activity: chat, currentTaskId: null, currentTaskKind: null };
 
     const last = this.#repo.lastFinished(def.id);
     const cleared = this.#repo.errorClearedAt(def.id);
     const unseen = last && (!cleared || (last.finishedAt ?? '') > cleared);
-    if (unseen && last.status === 'failed') return { ...base, status: 'error', activity: last.error, currentTaskId: last.id };
+    if (unseen && last.status === 'failed') return { ...base, status: 'error', activity: last.error, currentTaskId: last.id, currentTaskKind: kind(last) };
     // Concluída, mas o relatório não bate com o diff: pede o seu olhar como um erro.
     const v = last?.result?.verification;
     if (unseen && last.status === 'done' && v?.status === 'suspect') {
-      return { ...base, status: 'error', activity: `Resultado suspeito: ${v.reason}`, currentTaskId: last.id };
+      return { ...base, status: 'error', activity: `Resultado suspeito: ${v.reason}`, currentTaskId: last.id, currentTaskKind: kind(last) };
     }
-    return { ...base, status: 'idle', activity: null, currentTaskId: null };
+    return { ...base, status: 'idle', activity: null, currentTaskId: null, currentTaskKind: null };
   }
 
   /* ---------- execução ---------- */
@@ -335,10 +352,10 @@ export class TaskBus {
     const def = this.#registry.get(agentId);
     if (!def) return;
     const info = this.agentInfo(def);
-    const stamp = `${info.status}|${info.activity}|${info.currentTaskId}`;
+    const stamp = `${info.status}|${info.activity}|${info.currentTaskId}|${info.currentTaskKind}`;
     if (this.#published.get(agentId) === stamp) return;
     this.#published.set(agentId, stamp);
-    this.#bus.publish('agent.status', { status: info.status, activity: info.activity, currentTaskId: info.currentTaskId }, { agentId });
+    this.#bus.publish('agent.status', { status: info.status, activity: info.activity, currentTaskId: info.currentTaskId, currentTaskKind: info.currentTaskKind }, { agentId });
   }
 
   #must(id: string): Task {

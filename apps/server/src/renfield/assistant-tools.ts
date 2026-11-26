@@ -1,11 +1,12 @@
-import type { CalendarOccurrence, Reminder, TodoList } from '@shack/shared';
+import type { CalendarOccurrence, Habit, Reminder, TodoList } from '@shack/shared';
 import type { CalendarProvider } from '../assistant/calendar.ts';
+import { addDays, type Habits } from '../assistant/habits.ts';
 import type { Lists, Notes } from '../assistant/organizer.ts';
 import type { Reminders } from '../assistant/reminders.ts';
 import { fmtWhen, parseWhen } from '../assistant/time.ts';
 import type { Timers } from '../assistant/timers.ts';
 import type { Notifier } from '../notifications/notifier.ts';
-import { bool, id, num, priority, text, textList, when as whenArg } from './lenient.ts';
+import { bool, day as dayArg, id, num, priority, text, textList, when as whenArg } from './lenient.ts';
 import { listOut, type RenfieldTool } from './tools.ts';
 
 const out = (v: unknown) => JSON.stringify(v);
@@ -25,7 +26,7 @@ export function listAlias(ref: string, lists: Pick<Lists, 'find'>): TodoList | n
 }
 
 export type AssistantDeps = {
-  calendar: CalendarProvider; reminders: Reminders; timers: Timers; lists: Lists; notes: Notes; notifier: Notifier; timezone: string;
+  calendar: CalendarProvider; reminders: Reminders; timers: Timers; lists: Lists; notes: Notes; habits: Habits; notifier: Notifier; timezone: string;
 };
 
 export function assistantTools(d: AssistantDeps): RenfieldTool[] {
@@ -39,6 +40,18 @@ export function assistantTools(d: AssistantDeps): RenfieldTool[] {
     if (l) return l;
     if (create) return d.lists.create(ref);
     throw new Error(`Não existe lista "${ref}". Listas: ${d.lists.all().map((x) => x.name).join(', ')}.`);
+  };
+  // A semana até hoje basta para ele responder "fiz ontem?" sem mandar o ano inteiro para o modelo.
+  const habit = (h: Habit) => {
+    const today = d.habits.today(), weekAgo = addDays(today, -6);
+    return { id: h.id, name: h.name, doneToday: h.days.includes(today), streak: h.streak, best: h.best, total: h.total, doneLast7Days: h.days.filter((x) => x >= weekAgo) };
+  };
+  // Não cria sozinho: "fiz academia" com o nome errado não pode virar um hábito novo sem você saber.
+  const findHabit = (ref: string): Habit => {
+    const h = d.habits.find(ref);
+    if (h) return h;
+    const names = d.habits.all().map((x) => x.name);
+    throw new Error(`Não existe hábito "${ref}". ${names.length ? `Hábitos: ${names.join(', ')}.` : 'Nenhum hábito criado ainda.'} Pergunte ao dono da casa antes de criar.`);
   };
 
   return [
@@ -216,6 +229,47 @@ export function assistantTools(d: AssistantDeps): RenfieldTool[] {
       description: 'Apaga uma lista inteira. Ação destrutiva: o dono da casa confirma antes.',
       shape: { list: text(60, 1) },
       run: (a) => { const l = findList(String(a.list)); d.lists.delete(l.id); return out({ deleted: l.name }); },
+    },
+
+    /* ---------- hábitos ---------- */
+    {
+      name: 'habits_list', group: 'habits', reads: true,
+      description: 'Hábitos acompanhados no Quadro: se já foi feito hoje, a sequência atual (streak), o recorde, o total e os dias feitos na última semana.',
+      shape: {},
+      run: () => listOut(d.habits.all().map(habit), 'nenhum hábito criado', { today: d.habits.today() }),
+    },
+    {
+      name: 'habits_check', group: 'habits',
+      description: 'Marca um hábito como feito num dia (padrão: hoje), ou desmarca com done=false. Use o nome do hábito. Se ele não existir, pergunte antes de criar.',
+      shape: {
+        habit: text(60, 1).describe('nome ou id do hábito'),
+        day: dayArg().optional().describe('AAAA-MM-DD, "hoje" ou "ontem". Sem dia, vale hoje no fuso da casa'),
+        done: bool().optional(),
+      },
+      run: (a) => {
+        const h = findHabit(String(a.habit));
+        const day = d.habits.resolveDay(a.day as string | undefined);
+        const done = a.done !== false;
+        return out({ [done ? 'checked' : 'unchecked']: day, habit: habit(d.habits.mark(h.id, day, done)) });
+      },
+    },
+    {
+      name: 'habits_create', group: 'habits',
+      description: 'Cria um hábito para acompanhar no Quadro, com a grade de quadradinhos de cada dia feito.',
+      shape: { name: text(60, 1) },
+      run: (a) => out({ created: habit(d.habits.create(String(a.name))) }),
+    },
+    {
+      name: 'habits_rename', group: 'habits',
+      description: 'Renomeia um hábito. O histórico continua.',
+      shape: { habit: text(60, 1).describe('nome ou id atual'), name: text(60, 1) },
+      run: (a) => out({ renamed: habit(d.habits.update(findHabit(String(a.habit)).id, { name: String(a.name) })) }),
+    },
+    {
+      name: 'habits_delete', group: 'habits',
+      description: 'Apaga um hábito e todo o histórico dele. Ação destrutiva: o dono da casa confirma antes.',
+      shape: { habit: text(60, 1).describe('nome ou id') },
+      run: (a) => { const h = findHabit(String(a.habit)); d.habits.delete(h.id); return out({ deleted: h.name }); },
     },
 
     /* ---------- notas ---------- */

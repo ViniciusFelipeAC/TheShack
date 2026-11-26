@@ -1,0 +1,6 @@
+/* Galeria do Harker: as imagens na ordem do post. No celular, desliza para o lado, uma de cada vez. */
+.design .gallery { list-style: none; margin: 0; padding: 0 0 6px; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
+.design .shot { flex: 0 0 min(78%, 300px); scroll-snap-align: start; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.design .shot img, .design .shot .ph { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+.design .shot .btn.small { font-size: 12px; }
+.adjust textarea { min-height: 76px; }

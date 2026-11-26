@@ -38,6 +38,7 @@ limits:
 
 # Como ele aparece na casa. As opções estão comentadas no agent.yaml do Renfield.
 appearance:
+  order: 1               # primeira mesa depois das de chat; a Mina vem logo depois
   palette:
     skin: "#c08560"
     hair: "#1a1614"

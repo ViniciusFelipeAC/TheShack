@@ -13,3 +13,6 @@ export const ERRORS = {
 };
 
 export const IdParam = z.object({ id: z.string() });
+
+/** Corpo de arquivo (anexos e imagens). */
+export const Binary = z.string().openapi({ type: 'string', format: 'binary' });

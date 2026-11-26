@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type Attachment, ATTACHMENT_LIMITS, type AttachmentKind, attachmentKind } from '@shack/shared';
 import { cleanExternal, stripInvisible } from '../core/external.ts';
@@ -103,6 +103,30 @@ export class Attachments {
       if (!r) throw badRequest('Um dos anexos não existe mais. Anexe de novo.');
       if (r.message_id !== null) throw badRequest('Esse anexo já foi usado em outra mensagem. Anexe de novo.');
       return toAttachment(r);
+    });
+  }
+
+  /**
+   * Copia anexos para a pasta de uma tarefa e devolve os nomes usados. Servem os soltos e os já usados no chat.
+   * Confere todos antes de copiar o primeiro: um id que falta não deixa cópia pela metade.
+   */
+  copyTo(ids: string[], dir: string): string[] {
+    const list = [...new Set(ids)].map((id) => {
+      const r = this.#db.prepare('SELECT * FROM attachments WHERE id = ?').get(id);
+      if (!r || !existsSync(join(this.#dir, id))) throw badRequest('Um dos anexos não existe mais. Anexe de novo.');
+      return toAttachment(r);
+    });
+    mkdirSync(dir, { recursive: true });
+    const used = new Set<string>();
+    return list.map((a) => {
+      // Sem os caracteres que o Windows recusa em nome de arquivo; nomes repetidos ganham um número.
+      const base = a.name.replace(/[<>:"|?*\x00-\x1f]/g, '-');
+      const dot = base.lastIndexOf('.');
+      let name = base;
+      for (let n = 2; used.has(name.toLowerCase()); n++) name = dot > 0 ? `${base.slice(0, dot)}-${n}${base.slice(dot)}` : `${base}-${n}`;
+      used.add(name.toLowerCase());
+      copyFileSync(join(this.#dir, a.id), join(dir, name));
+      return name;
     });
   }
 

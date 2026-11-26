@@ -1,0 +1,6 @@
+{
+  "name": "shack",
+  "version": "0.1.0",
+  "license": "Apache-2.0 AND OFL-1.1",
+  "description": "Skills lidas e aprovadas para os agentes do The Shack. Cada agente só carrega as que o manifesto dele pede pelo nome."
+}

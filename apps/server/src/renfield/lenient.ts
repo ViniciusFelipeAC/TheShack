@@ -73,7 +73,39 @@ export function textList(o: { maxItems: number; maxLength: number }) {
   }, z.array(z.string().min(1).max(o.maxLength)).min(1).max(o.maxItems));
 }
 
-const BR_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,]+(?:às\s+)?(\d{1,2})[:h](\d{2}))?$/i;
+/**
+ * Dia do calendário: "2026-11-25", "25/11/2026" ou um horário ISO (vale só a data). "hoje" e "ontem"
+ * passam como palavra, para quem sabe o fuso da casa resolver.
+ */
+export function day() {
+  return z.preprocess((v) => {
+    if (typeof v !== 'string') return v;
+    const t = v.trim().toLowerCase();
+    const br = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (br) return `${br[3]}-${br[2]!.padStart(2, '0')}-${br[1]!.padStart(2, '0')}`;
+    return t.match(/^(\d{4}-\d{2}-\d{2})[t ]/)?.[1] ?? t;
+  }, z.string().min(1));
+}
+
+/** Formato de imagem do Instagram. Proporções, tamanhos e nomes em português viram o formato certo. */
+export const designFormat = () => oneOf(['feed', 'square', 'story'], {
+  '4:5': 'feed', '4x5': 'feed', '1080x1350': 'feed', retrato: 'feed', portrait: 'feed', post: 'feed', carrossel: 'feed', carousel: 'feed',
+  '1:1': 'square', '1x1': 'square', '1080x1080': 'square', quadrado: 'square', quadrada: 'square',
+  '9:16': 'story', '9x16': 'story', '1080x1920': 'story', stories: 'story', reels: 'story', reel: 'story', vertical: 'story',
+});
+
+/** Nome de imagem: "1", 1, "01.png" e "out/01.png" viram "01". O que sobra precisa ser letra, número e hífen. */
+export function imageNameOf(v: string): string {
+  const t = v.trim().toLowerCase().replace(/\\/g, '/').replace(/^.*\//, '').replace(/\.png$/, '');
+  return /^\d$/.test(t) ? `0${t}` : t;
+}
+export const IMAGE_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+export const imageName = () => z.preprocess(
+  (v) => (typeof v === 'number' ? imageNameOf(String(v)) : typeof v === 'string' ? imageNameOf(v) : v),
+  z.string().regex(IMAGE_NAME, 'use letras minúsculas, números e hífen, como "01"'),
+);
+
+const BR_DATE =/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,]+(?:às\s+)?(\d{1,2})[:h](\d{2}))?$/i;
 
 /** Data e hora: aparada; aceita também "22/10/2026 08:00" e "22/10/2026 às 8h30", que viram ISO. */
 export function when() {

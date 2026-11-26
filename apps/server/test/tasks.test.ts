@@ -16,12 +16,15 @@ test('health é público, e o resto exige token', async (t) => {
   assert.equal((await s.call('GET', '/agents', undefined, 'shk_inventado')).status, 401);
 });
 
-test('lista os dois agentes, ociosos', async (t) => {
-  const s = setup(); t.after(s.cleanup);
+test('lista os quatro agentes, ociosos, com o runner e o artigo de cada um', async (t) => {
+  // Um navegador "existente": sem ele, o Harker ficaria desativado nesta máquina.
+  const s = setup({ browserPath: process.execPath }); t.after(s.cleanup);
   const r = await s.call('GET', '/agents');
-  assert.deepEqual(r.body.map((a: { id: string }) => a.id), ['etnad', 'renfield']);
+  assert.deepEqual(r.body.map((a: { id: string }) => a.id), ['etnad', 'harker', 'mina', 'renfield']);
   assert.ok(r.body.every((a: { status: string }) => a.status === 'idle'));
   assert.deepEqual(r.body[0].models, ['opus', 'sonnet']);
+  assert.deepEqual(r.body.map((a: { runner: string }) => a.runner), ['code', 'design', 'text', 'none']);
+  assert.deepEqual(r.body.map((a: { article: string }) => a.article), ['o', 'o', 'a', 'o']);
 });
 
 test('tarefa vai de queued a done, com histórico e eventos', async (t) => {

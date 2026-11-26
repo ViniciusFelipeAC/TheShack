@@ -74,7 +74,7 @@ html[data-keyboard] .house-app { padding-bottom: 8px; }
 }
 html.resizing, html.resizing * { cursor: col-resize !important; user-select: none; -webkit-user-select: none; }
 .stage { position: relative; min-height: 0; min-width: 0; border-radius: 14px; overflow: hidden; background: #0d1312; border: 1px solid var(--line); }
-.scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; image-rendering: pixelated; }
 
 .topbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; z-index: 5; pointer-events: none; }
 .topbar > * { pointer-events: auto; }
@@ -99,8 +99,9 @@ html.resizing, html.resizing * { cursor: col-resize !important; user-select: non
 .notice { margin: 0; padding: 10px 12px; border-left: 3px solid var(--amber); pointer-events: auto; }
 .notice.err { border-left-color: var(--danger); }
 
-.dock { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 8px; z-index: 4; max-width: calc(100% - 70px); flex-wrap: wrap; }
-.acard { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 8px; width: 236px; cursor: pointer; text-align: left; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px; }
+/* Uma linha só: com três agentes ou mais, os cartões encolhem em vez de subir numa segunda linha por baixo do painel. */
+.dock { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 8px; z-index: 4; max-width: calc(100% - 70px); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.acard { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 8px; flex: 0 1 236px; min-width: 150px; cursor: pointer; text-align: left; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px; }
 .acard:hover { background: var(--glass-strong); }
 .acard[aria-pressed="true"] { border-color: rgba(240, 176, 94, 0.55); }
 .acard[data-state="waiting_input"] { border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
@@ -271,8 +272,12 @@ textarea.prose { font-family: var(--font-ui); font-size: 15px; }
   /* Gaveta fechada mostra só o essencial; aberta, os botões de conversa entram e o retrato sai no celular estreito. */
   .chat:not(.open) .conv-btn, .chat:not(.open) .conv-menu { display: none; }
   .chead { gap: 6px; }
-  .dock { bottom: 140px; gap: 6px; max-width: calc(100% - 20px); flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .acard { width: auto; flex: none; padding: 6px 10px 6px 6px; }
+  /* Cartões em coluna, retrato em cima e nome embaixo: quatro agentes cabem na largura do iPhone sem rolar. */
+  .dock { bottom: 140px; right: 10px; gap: 6px; max-width: none; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .acard { flex: 1 1 0; min-width: 66px; max-width: 132px; flex-direction: column; gap: 4px; padding: 6px 4px 5px; text-align: center; }
+  .acard .who { flex-direction: row; align-items: center; justify-content: center; gap: 4px; max-width: 100%; }
+  .acard .name { font-size: 12.5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acard .pill { order: -1; font-size: 0; gap: 0; }
   .acard .act { display: none; }
   .portrait { width: 36px; height: 36px; }
   .zoom { display: none; }
@@ -299,7 +304,7 @@ textarea.prose { font-family: var(--font-ui); font-size: 15px; }
 @media (max-width: 480px) { .chat.open .chead .portrait { display: none; } }
 /* Toque: no iPhone, campo com letra menor que 16px faz o Safari dar zoom ao tocar. */
 @media (pointer: coarse) {
-  input, select, textarea, .compose textarea { font-size: 16px; }
+  input, select, textarea, .compose textarea, textarea.prose { font-size: 16px; }
   .compose { gap: 6px; padding: 8px 10px 10px; }
   .compose select { width: 82px; }
   .compose .btn { padding: 8px 12px; }
@@ -408,3 +413,13 @@ a.att-file:hover { border-color: rgba(240, 176, 94, 0.5); }
 @keyframes fresh { 0%, 30% { background: rgba(240, 176, 94, 0.28); box-shadow: 0 0 0 1px rgba(240, 176, 94, 0.6); } 100% { background: transparent; box-shadow: none; } }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } .fresh, .cal-day[data-fresh] { animation: none; } }
+
+/* ---------- Fase 9: o prompt e a conferência da Mina (TaskReport.tsx) ---------- */
+.stack.tight { gap: 6px; }
+.prompt { margin: 0; max-height: 260px; overflow: auto; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.25); white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.45; }
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.checks li { display: flex; gap: 8px; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
+.tag.met { border-color: rgba(140, 194, 155, 0.5); color: var(--moss); }
+.tag.partial { border-color: rgba(240, 176, 94, 0.6); color: var(--amber); }
+.tag.missing { border-color: rgba(239, 129, 112, 0.5); color: var(--danger); }
+.history details > .stack { margin: 6px 0; }

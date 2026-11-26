@@ -1,0 +1,45 @@
+# Harker: cria imagens para o Instagram dos seus projetos e escreve a legenda.
+# Edite à vontade. O servidor recarrega este arquivo sozinho.
+id: harker
+name: Harker
+role: Imagens para o Instagram
+article: o             # "o Harker" nos textos da casa
+
+# Apelidos dos modelos do seu plano, em ordem de preferência. O Sonnet gasta menos cota;
+# dá para trocar pelo app, no painel dele, sem editar este arquivo.
+model: [opus, sonnet]
+effort: medium
+
+persona: persona.md
+chat: false
+
+# design: escreve HTML e CSS e transforma em PNG pela ferramenta render. Sem shell, sem rede e sem git.
+runner: design
+
+# Skills lidas de plugins/shack/skills. Só o runner design as carrega.
+skills: [canvas-design, theme-factory]
+
+# Documentos que entram no prompt dele a cada tarefa. Teto: 40 mil caracteres no total.
+# O ai-look-signals.md é uma cópia do da Mina: o teste skills.test.ts confere que os dois continuam iguais.
+knowledge: [knowledge/*.md]
+
+workspace: optional    # com um projeto, ele lê o projeto, sem nunca escrever nele
+
+limits:
+  concurrency: 1
+  maxTurns: 80
+
+# Como ele aparece na casa. As opções estão comentadas no agent.yaml do Renfield.
+appearance:
+  order: 3               # mesa da ala do lado da figueira
+  palette:
+    skin: "#e8b98f"
+    hair: "#3b2a20"      # castanho escuro, bagunçado
+    outfit: "#7a6a55"    # avental de pintor
+    accent: "#c2563a"    # respingo de tinta
+    pants: "#2b2f36"
+    shoes: "#1b1a1c"
+  hair: messy
+  accessory: none        # a câmera pendurada no pescoço chega com o cavalete
+  station: easel         # até o cavalete chegar, vira a mesa de um monitor
+  idle: [window, coffee, armchair]

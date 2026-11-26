@@ -2,6 +2,7 @@
    Tudo é desenhado uma vez em canvases fora da tela; só telas, fogo, luz e neblina mudam a cada quadro. */
 import { ANNEX_PX, annexX, type HouseLayout, type Rect, type Station, T, wingLeft } from './layout.ts';
 import { circle, type Ctx, ellipse, mk, R, rng } from './pixel.ts';
+import { chairArt, deskArt, stationLights } from './stations.ts';
 
 export type Furniture = { x: number; y: number; img: HTMLCanvasElement; sortY: number; extra?: () => void };
 export type Light = { x: number; y: number; r: number; c: string; g: number; cut?: number };
@@ -118,38 +119,8 @@ export function forestViews(L: HouseLayout): ForestView[] {
 
 /* ---------- móveis, ordenados por Y junto com os personagens ---------- */
 
-function chair(g: Ctx, cx: number, cy: number): void {
-  R(g, cx - 5, cy - 9, 10, 8, '#15171a'); R(g, cx - 4, cy - 8, 8, 6, '#202328'); R(g, cx - 5, cy - 9, 10, 1, '#2e3238');
-  for (let x = cx - 3; x < cx + 4; x += 2) R(g, x, cy - 7, 1, 4, '#1a1c20');
-  R(g, cx - 1, cy - 1, 2, 2, '#0e1012'); R(g, cx - 5, cy + 1, 10, 1, '#0e1012'); R(g, cx - 6, cy + 1, 1, 1, '#08090a'); R(g, cx + 5, cy + 1, 1, 1, '#08090a');
-}
-
 function leaf(g: Ctx, x: number, y: number, w: number, h: number, c: string): void {
   R(g, x + 1, y, w - 2, h, c); R(g, x, y + 1, w, h - 2, c); R(g, x + 1, y + 1, 2, 1, '#5a8f5d');
-}
-
-/** Mesa de madeira com um monitor, luminária, xícara e caderno. */
-function deskSingle(g: Ctx, cx: number): void {
-  R(g, cx - 23, 62, 46, 2, 'rgba(0,0,0,0.35)'); R(g, cx - 22, 53, 2, 10, '#0e1012'); R(g, cx + 20, 53, 2, 10, '#0e1012');
-  R(g, cx + 6, 53, 13, 10, '#16181b'); R(g, cx + 6, 58, 13, 1, '#22262a'); R(g, cx + 11, 55, 3, 1, '#b08a4a'); R(g, cx + 11, 60, 3, 1, '#b08a4a');
-  R(g, cx - 24, 45, 48, 7, '#4a3628'); R(g, cx - 24, 45, 48, 1, '#5c4434'); R(g, cx - 24, 51, 48, 2, '#2a1e17');
-  R(g, cx - 12, 26, 24, 16, '#0e1012'); R(g, cx - 11, 27, 22, 14, '#1a1d21'); R(g, cx - 2, 42, 4, 4, '#1a1d21'); R(g, cx - 6, 46, 12, 1, '#0e1012');
-  R(g, cx - 21, 47, 6, 2, '#16181b'); R(g, cx - 19, 37, 1, 10, '#b08a4a'); R(g, cx - 19, 37, 4, 1, '#b08a4a');
-  R(g, cx - 17, 35, 6, 3, '#c7913f'); R(g, cx - 17, 35, 6, 1, '#d9a24a'); R(g, cx - 16, 38, 4, 1, '#ffe0a6');
-  R(g, cx + 7, 46, 4, 4, '#cfc9bd'); R(g, cx + 11, 47, 1, 2, '#cfc9bd'); R(g, cx + 7, 46, 4, 1, '#4a2f20');
-  R(g, cx + 13, 46, 8, 5, '#2c3b36'); R(g, cx + 13, 46, 8, 1, '#3a4d47'); R(g, cx + 14, 47, 1, 4, '#e8a75a');
-}
-
-/** Mesa preta com dois monitores, teclado com luz, caneca e um cacto. */
-function deskDual(g: Ctx, cx: number): void {
-  R(g, cx - 23, 62, 46, 2, 'rgba(0,0,0,0.35)'); R(g, cx - 22, 53, 2, 10, '#0b0c0e'); R(g, cx + 20, 53, 2, 10, '#0b0c0e');
-  R(g, cx - 24, 45, 48, 7, '#16181b'); R(g, cx - 24, 45, 48, 1, '#2a2e33'); R(g, cx - 24, 51, 48, 2, '#0b0c0e');
-  for (const bx of [cx - 22, cx + 1]) { R(g, bx, 26, 22, 15, '#0b0c0e'); R(g, bx + 1, 27, 20, 13, '#181b1f'); }
-  R(g, cx - 2, 41, 4, 4, '#181b1f'); R(g, cx - 8, 45, 16, 1, '#0b0c0e');
-  R(g, cx - 10, 47, 20, 3, '#0f1113'); R(g, cx - 9, 47, 18, 1, '#24282d');
-  for (let x = cx - 9; x < cx + 9; x += 2) R(g, x, 48, 1, 1, 'rgba(232,167,90,0.55)');
-  R(g, cx + 13, 48, 3, 2, '#0f1113'); R(g, cx - 19, 45, 3, 5, '#8a949c'); R(g, cx - 19, 47, 3, 1, '#2c3b36');
-  R(g, cx + 18, 47, 4, 3, '#2a2d31'); R(g, cx + 19, 43, 2, 4, '#447a4b'); R(g, cx + 18, 44, 1, 2, '#447a4b');
 }
 
 function concreteVase(g: Ctx, px: number): void {
@@ -167,8 +138,9 @@ export function buildFurniture(L: HouseLayout, hooks: { screens(s: Station): voi
   };
 
   for (const s of L.stations) {
-    add(s.cx - 26, 22, 52, 44, 64, (g) => (s.kind === 'dual' ? deskDual(g, s.cx) : deskSingle(g, s.cx)), s.agentId ? () => hooks.screens(s) : undefined);
-    add(s.cx - 8, 52, 16, 16, 66.5, (g) => chair(g, s.cx, 66));
+    // as mesas e as cadeiras ficam em stations.ts
+    add(s.cx - 26, 22, 52, 44, 64, (g) => deskArt(g, s), s.agentId ? () => hooks.screens(s) : undefined);
+    add(s.cx - 8, 52, 16, 16, 66.5, (g) => chairArt(g, s));
   }
 
   add(76, 26, 56, 40, 64, (g) => { // ilha da cozinha com cafeteira
@@ -267,7 +239,7 @@ export function interiorLights(L: HouseLayout, flicker: number): Light[] {
     { x: 265, y: 16, r: 28, c: '255,190,110', g: 0.18 },
     { x: 267, y: 138, r: 62 + flicker, c: '255,150,70', g: 0.3 },
   ];
-  for (const s of L.stations) if (s.kind === 'single') lights.push({ x: s.cx - 16, y: 37, r: 40, c: '255,190,110', g: 0.22 });
+  for (const s of L.stations) lights.push(...stationLights(s));
   for (let k = 0; k < L.wings; k++) lights.push({ x: wingLeft(k) * T + 25, y: 92, r: 46, c: '255,190,110', g: 0.24 });
   for (const v of forestViews(L)) for (let x = v.rect.x + 17; x < v.rect.x + v.rect.w; x += 36) lights.push({ x, y: 30, r: 30, c: '170,195,210', g: 0.04, cut: 0.45 });
   return lights;

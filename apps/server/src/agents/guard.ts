@@ -89,6 +89,37 @@ export function workspaceGuard(root: string): HookCallback {
   };
 }
 
+/** Pastas do runner design: ele lê em qualquer raiz de `read` e só escreve nas de `write`. Caminhos relativos partem de `cwd`. */
+export type Roots = { cwd: string; read: string[]; write: string[] };
+
+const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+/** A parte fixa de um padrão do Glob, antes do primeiro curinga: "C:/x/**\/*.ts" lê dentro de "C:/x/". */
+const globBase = (pattern: string) => pattern.split(/[*?[{]/)[0]!.replace(/[^\\/]*$/, '');
+
+/** Motivo para bloquear a chamada, ou nulo. Um Glob com padrão absoluto ou com ".." também passa pela conferência. */
+export function checkRoots(r: Roots, tool: string, input: unknown): string | null {
+  const args = (input ?? {}) as Record<string, unknown>;
+  const writing = WRITE_TOOLS.has(tool);
+  const paths = FILE_KEYS.map((k) => args[k]).filter((v): v is string => typeof v === 'string' && v !== '');
+  if (tool === 'Glob' && typeof args.pattern === 'string') paths.push(globBase(args.pattern) || '.');
+  for (const p of paths) {
+    const abs = resolve(r.cwd, p);
+    if (writing && !r.write.some((root) => isInside(root, abs))) return `Bloqueado: "${p}" fica fora de onde você escreve. Escreva só em ${r.write.join(', ')}.`;
+    if (!writing && !r.read.some((root) => isInside(root, abs))) return `Bloqueado: "${p}" fica fora das pastas que você pode ler.`;
+  }
+  return null;
+}
+
+/** Hook PreToolUse que aplica `checkRoots` em toda chamada, em qualquer modo de permissão. */
+export function rootsGuard(r: Roots): HookCallback {
+  return async (input) => {
+    if (input.hook_event_name !== 'PreToolUse') return {};
+    const reason = checkRoots(r, input.tool_name, input.tool_input);
+    if (!reason) return {};
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } };
+  };
+}
+
 /** Frase curta de progresso para cada ferramenta, mostrada na cena e no painel. */
 export function describeTool(root: string, name: string, input: unknown): string | null {
   const a = (input ?? {}) as Record<string, unknown>;
@@ -104,6 +135,7 @@ export function describeTool(root: string, name: string, input: unknown): string
       return cmd ? `Rodando ${cmd.length > 60 ? cmd.slice(0, 57) + '…' : cmd}` : 'Rodando um comando';
     }
     case 'TodoWrite': return 'Planejando os passos';
+    case 'StructuredOutput': return 'Escrevendo o relatório';
     case 'WebFetch': case 'WebSearch': return 'Pesquisando';
     case 'AskUserQuestion': return null;
     default: return `Usando ${name}`;
