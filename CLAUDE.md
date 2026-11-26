@@ -1,6 +1,6 @@
 # The Shack
 
-Sistema pessoal de agentes: o Renfield (mordomo, chat) e o etnaD (programação), com uma casa em pixel art como tela principal. O plano está em `docs/PLAN.md` e a API em `docs/API.md`.
+Sistema pessoal de agentes: o Renfield (mordomo, chat), o etnaD (programação), a Mina (prompts e conferência) e o Harker (imagens para o Instagram), com uma casa em pixel art como tela principal. As decisões, o que foi feito e o que falta estão em `docs/HISTORICO.md`; a API, em `docs/API.md`.
 
 ## Comandos
 

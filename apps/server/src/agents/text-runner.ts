@@ -156,14 +156,14 @@ export class TextRunner implements AgentRunner {
     }
 
     try {
-      const outcome = await this.#execute(task, agent, io, text, site?.root ?? null, Boolean(reviewed));
+      const outcome = await this.#execute(agent, io, text, site?.root ?? null, Boolean(reviewed));
       return await this.#report(outcome, site, Boolean(reviewed));
     } finally {
       await site?.cleanup().catch(() => undefined);
     }
   }
 
-  async #execute(task: Task, agent: AgentDef, io: RunIO, text: string, root: string | null, review: boolean) {
+  async #execute(agent: AgentDef, io: RunIO, text: string, root: string | null, review: boolean) {
     const m = agent.manifest!;
     const o = this.#o;
     const preferences = [m.model].flat();

@@ -1,10 +1,10 @@
 # The Shack
 
-Sistema pessoal de agentes de IA. O Renfield é o mordomo e a porta de entrada; o etnaD é o agente de programação; a Mina escreve os prompts dele e confere as entregas. Plano completo em [docs/PLAN.md](docs/PLAN.md) e referência da API em [docs/API.md](docs/API.md).
+Sistema pessoal de agentes de IA. O Renfield é o mordomo e a porta de entrada; o etnaD é o agente de programação; a Mina escreve os prompts dele e confere as entregas; o Harker cria imagens para o Instagram. As decisões, o que foi feito e o que falta estão em [docs/HISTORICO.md](docs/HISTORICO.md), e a referência da API em [docs/API.md](docs/API.md).
 
-**Estado atual:** Fase 7, a última do plano. A tela principal é a casa: uma casa de vidro numa floresta enevoada, onde cada agente tem a sua mesa e anda pela casa conforme o que está fazendo de verdade. A Shack instala no iPhone como app, pelo Tailscale.
+A tela principal é a casa: uma casa de vidro numa floresta enevoada, onde cada agente tem a sua mesa e anda pela casa conforme o que está fazendo de verdade. A Shack instala no iPhone como app, pelo Tailscale.
 
-- **O Renfield e o etnaD** conversam e programam de verdade, os dois pelo Agent SDK e só com o login da sua assinatura.
+- **Os agentes** conversam, programam e desenham de verdade, todos pelo Agent SDK e só com o login da sua assinatura.
 - **A Shack também tem** agenda, lembretes, alarmes, timers, listas, notas e notificações, pelo chat e por telas próprias. O **Quadro** junta o calendário, a lista de compras, os afazeres e os hábitos numa tela só.
 - **Anexos:** mande fotos, PDFs e arquivos de texto ao Renfield pelo **+** ao lado da caixa de texto, colando com Ctrl+V ou arrastando para o chat.
 
@@ -122,6 +122,17 @@ Cada volta pede um toque seu: a conferência é automática, a correção não. 
 
 O "treino" dela são os arquivos `.md` em `agents/mina/knowledge/`: o seu PDF sobre sites com cara de IA e a receita de prompt para o etnaD. Para ensinar mais, solte outro `.md` na pasta (teto de 40 mil caracteres no total).
 
+## Imagens com o Harker
+
+1. Peça no chat: "Pede pro Harker um carrossel de 3 imagens sobre o meu-app." Para usar fotos suas, anexe na mesma mensagem. Se for sobre um projeto cadastrado, diga qual: ele lê o projeto, sem mexer nele.
+2. Quando ele termina, o aviso chega no chat. No painel dele, em **Feito recentemente**, abra as imagens:
+   - **Salvar imagens** abre o compartilhar do celular, com "Salvar imagens" para as Fotos (precisa do HTTPS do Tailscale). No computador, o botão baixa os arquivos.
+   - **Copiar legenda** e **Copiar texto alternativo** de cada imagem.
+   - **Ajustar** pede o que mudar e refaz só isso, partindo do trabalho anterior.
+3. O servidor confere cada imagem no disco (tamanho, formato do carrossel e se saiu do render), e a legenda nos limites do Instagram.
+
+O Harker usa o Opus, que gasta bem mais cota que o Sonnet. Para economizar, troque o modelo no painel dele. O render usa o Edge, o Chrome ou o Chromium que já estão instalados; sem nenhum deles, o Harker fica desativado com o motivo.
+
 ## O que dá para pedir ao Renfield
 
 - "Me lembra de tomar o remédio todo dia útil às 8h."
@@ -162,7 +173,7 @@ Quem dispara é o servidor, então o computador com a Shack precisa estar ligado
 
 A Shack nunca lê nem guarda o seu login. Quem autentica é o Claude Code oficial, e o servidor remove do ambiente qualquer variável que geraria cobrança por uso, como `ANTHROPIC_API_KEY`. Na primeira conversa, ele confere se a credencial é a da assinatura. Se não for, nada é enviado ao modelo. O uso conta na mesma cota que você usa no Claude Code e no claude.ai.
 
-**Medidor de cota.** A barra do topo mostra quanto da janela atual do plano já foi usado (aparece depois da primeira resposta; antes disso, "–"). Perto do limite, sai um aviso, e o Renfield confirma com você antes de mandar uma tarefa nova ao etnaD. Se o Claude Code indicar cobrança extra, aparece um aviso vermelho. Os detalhes de cada janela ficam em **Configurações**, **Conta**.
+**Uso do plano.** O canto de cima da casa mostra a sessão de 5 horas e a semana, o mesmo número do `/usage` do Claude Code. Toque nele para ver a hora em que cada uma renova e os tokens das tarefas de cada agente. A consulta não gasta modelo. A partir de 90%, sai um aviso, e o Renfield confirma com você antes de mandar uma tarefa nova ao etnaD. Se o Claude Code indicar cobrança extra, aparece um aviso vermelho.
 
 ## Teste rápido pelo PowerShell
 
@@ -184,8 +195,9 @@ agents/            um agente = uma pasta com agent.yaml e persona.md
 apps/server/       servidor (Hono + SQLite + WebSocket + Agent SDK)
 apps/web/          app web (React + Vite, instalável como PWA); a cena da casa fica em src/scene/
 packages/shared/   contratos zod compartilhados entre servidor e clientes
-docs/              plano e API
-scripts/           dev.ts (sobe tudo) e icons.ts (gera os ícones do app)
+plugins/shack/     as skills lidas que o Harker usa (canvas-design e theme-factory)
+docs/              histórico do projeto e API
+scripts/           dev.ts (sobe tudo), icons.ts (gera os ícones do app) e os atalhos do Windows e do Linux
 ```
 
 ## Agentes
@@ -194,7 +206,7 @@ Cada agente vive em `agents/<id>/`. O `agent.yaml` define nome, papel, modelos, 
 
 Os modelos são apelidos em ordem de preferência, por exemplo `[sonnet, haiku]`. O servidor usa o primeiro que o seu plano oferecer.
 
-Outros campos: `runner` diz quem executa as tarefas (`code` para o etnaD, `text` para a Mina, `none` só conversa), `knowledge` lista os documentos que entram no prompt a cada tarefa, e `article` (`o` ou `a`) é o artigo do nome nos textos da casa.
+Outros campos: `runner` diz quem executa as tarefas (`code` para o etnaD, `text` para a Mina, `design` para o Harker, `none` só conversa), `skills` lista as skills de `plugins/shack` que o runner `design` carrega, `knowledge` lista os documentos que entram no prompt a cada tarefa, e `article` (`o` ou `a`) é o artigo do nome nos textos da casa.
 
 **Aparência na casa:** fica em `appearance`, no `agent.yaml`. As opções estão comentadas no manifesto do Renfield.
 

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { parse } from 'yaml';
 import { ROOT } from '../src/config.ts';
 
-// As skills de plugins/shack foram lidas antes de entrar (docs/PHASE-9.md, seção 4).
+// As skills de plugins/shack foram lidas antes de entrar (docs/HISTORICO.md, Fase 9.2).
 // Estes testes seguram as regras quando alguém copiar uma versão nova do original.
 const PLUGIN = join(ROOT, 'plugins', 'shack');
 const SKILLS = join(PLUGIN, 'skills');

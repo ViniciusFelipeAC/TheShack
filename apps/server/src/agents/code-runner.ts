@@ -112,7 +112,7 @@ export class CodeRunner implements AgentRunner {
       outcome = await this.#execute(task, agent, ws, git, io, state);
     } catch (err) {
       const real = git?.branch ? await finishBranch(ws, git, task, false).catch(() => null) : null;
-      await this.#handoff(task, ws, io, state, err, real).catch(() => undefined);
+      await this.#handoff(ws, io, state, err, real).catch(() => undefined);
       throw err;
     }
     return this.#report(outcome, ws, git, task);
@@ -227,7 +227,7 @@ export class CodeRunner implements AgentRunner {
    * Nota de passagem quando a tarefa para no meio: o etnaD escreve em um turno curto, sem ferramentas.
    * Sem sessão, sem cota ou se o turno falhar, o servidor monta uma nota com o que registrou.
    */
-  async #handoff(task: Task, ws: Workspace, io: RunIO, state: RunState, err: unknown, real: GitOutcome | null): Promise<void> {
+  async #handoff(ws: Workspace, io: RunIO, state: RunState, err: unknown, real: GitOutcome | null): Promise<void> {
     if (io.signal.aborted && errorMessage(io.signal.reason) === SHUTDOWN_REASON) return;
     const cancelled = io.signal.aborted;
     const reason = cancelled ? 'cancelada pelo dono da casa' : errorMessage(err);

@@ -2,7 +2,7 @@
 
 Skills que os agentes do The Shack podem carregar. É um plugin local do Agent SDK: o runner passa `plugins: [{ type: 'local', path: 'plugins/shack' }]`, e cada agente só usa as skills que o manifesto dele pede pelo nome, como `shack:canvas-design`.
 
-A regra do projeto é não instalar skills de terceiros, porque uma skill é instrução que o modelo segue. As duas daqui são a exceção aprovada na Fase 9 (`docs/PHASE-9.md`, seção 4):
+A regra do projeto é não instalar skills de terceiros, porque uma skill é instrução que o modelo segue. As duas daqui são a exceção aprovada na Fase 9 (`docs/HISTORICO.md`):
 
 - Vêm do repositório público da Anthropic, com licença Apache 2.0.
 - Cada arquivo foi lido antes de entrar.
